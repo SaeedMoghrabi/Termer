@@ -1,1 +1,1 @@
-require("./server-runtime.cjs);
+require("./server-runtime.cjs");
