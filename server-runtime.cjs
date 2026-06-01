@@ -1630,6 +1630,8 @@ app.get("/health", (req, res) => {
 });
 
 if (fs.existsSync(CLIENT_DIST_DIR)) {
+  app.use(express.static(CLIENT_DIST_DIR));
+
   app.use(express.static(CLIENT_DIST_DIR, { index: false }));
 
   const sendClientApp = (_req, res) => {
