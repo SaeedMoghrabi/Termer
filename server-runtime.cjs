@@ -52,6 +52,7 @@ const { getCurriculumStatus, reloadCurriculumPlans } = require("./curriculumPlan
 const app = express();
 const PORT = Number(process.env.PORT || 3001);
 const CLIENT_DIST_DIR = path.join(__dirname, "CoursePlannerr", "dist");
+const CLIENT_ASSETS_DIR = path.join(CLIENT_DIST_DIR, "assets");
 const MANUAL_IMPORT_EXTENSIONS = new Set([".json", ".csv", ".xlsx", ".xls"]);
 const VISUAL_IMPORT_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".pdf"]);
 const MANUAL_IMPORT_WATCH_DEBOUNCE_MS = 2500;
@@ -1625,12 +1626,15 @@ app.post("/api/admin/announcements/:id/archive", async (req, res) => {
   }
 });
 
-app.get("/health", (req, res) => {
-  res.type("text/plain").send("Termer is running.");
-});
-
 if (fs.existsSync(CLIENT_DIST_DIR)) {
-  app.use(express.static(CLIENT_DIST_DIR));
+  if (fs.existsSync(CLIENT_ASSETS_DIR)) {
+    app.use("/assets", express.static(CLIENT_ASSETS_DIR, {
+      index: false,
+      fallthrough: false,
+      immutable: true,
+      maxAge: "1y",
+    }));
+  }
 
   app.use(express.static(CLIENT_DIST_DIR, { index: false }));
 
@@ -1639,9 +1643,9 @@ if (fs.existsSync(CLIENT_DIST_DIR)) {
   };
 
   app.get("/", sendClientApp);
-  app.get(/^\/(?!api\/|health$).*/, sendClientApp);
+  app.get(/^\/(?!api\/|assets\/).*/, sendClientApp);
 } else {
-  app.get("/", (_req, res) => {
+  app.get(/^\/(?!api\/).*/, (_req, res) => {
     res.status(503).type("text/plain").send("Termer frontend build is missing.");
   });
 }
