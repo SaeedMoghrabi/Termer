@@ -10,10 +10,11 @@ coverage/
 data/runtime/
 data/reports/
 .playwright-temp-lu/
-CoursePlannerr/
 eng.traineddata
 big-test-2.txt
 cd
 dir
 git
 main
+CoursePlannerr/node_modules/
+CoursePlannerr/dist/
