@@ -1,0 +1,20 @@
+{
+  "profiles": [
+    {
+      "userId": "2db9706d-7877-4db9-90ab-5cb82b2a918f",
+      "email": "shm38@mail.aub.edu",
+      "universityId": "aub",
+      "phoneNumber": "+96171498918",
+      "updatedAt": "2026-05-31T15:05:41.065Z",
+      "createdAt": "2026-05-16T11:08:11.984Z"
+    },
+    {
+      "userId": "ad173ef1-0155-43fe-8d68-f6fc8a30e80a",
+      "email": "okm053@student.bau.edu.lb",
+      "universityId": "bau",
+      "phoneNumber": "+96181659308",
+      "updatedAt": "2026-05-31T15:36:12.410Z",
+      "createdAt": "2026-05-16T11:11:32.365Z"
+    }
+  ]
+}

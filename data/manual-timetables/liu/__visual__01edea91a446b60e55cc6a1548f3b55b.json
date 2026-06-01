@@ -1,0 +1,121 @@
+{
+  "terms": [
+    {
+      "code": "portal-spring-2025-2026",
+      "description": "Spring 2025-2026",
+      "is_current": true
+    }
+  ],
+  "rows": [
+    {
+      "term_code": "portal-spring-2025-2026",
+      "term_description": "Spring 2025-2026",
+      "code": "CULT 200",
+      "title": "Introduction to Arab - Islamic Civilization",
+      "section": "GN405",
+      "crn": "LIU-VISUAL-CULT-200-GN405-WEDNESDAY-FRIDAY-0800",
+      "instructor": "Awad Merhi",
+      "campus": "All LIU Campuses",
+      "location": "405-E",
+      "days": "WF",
+      "time": "08:00 - 09:15",
+      "type": "Lecture",
+      "credits": 3,
+      "attributes": [
+        "School of Business"
+      ],
+      "prerequisites": "",
+      "source_schedule_note": "Imported from official visual timetable WhatsApp Image 2026-05-07 at 10.04.06 PM.jpeg",
+      "has_published_meetings": true
+    },
+    {
+      "term_code": "portal-spring-2025-2026",
+      "term_description": "Spring 2025-2026",
+      "code": "EENG 300",
+      "title": "Electric Circuits II",
+      "section": "A",
+      "crn": "LIU-VISUAL-EENG-300-A-TUESDAY-THURSDAY-0930",
+      "instructor": "Hussein Kain",
+      "campus": "All LIU Campuses",
+      "location": "803-F",
+      "days": "TR",
+      "time": "09:30 - 10:45",
+      "type": "Lecture",
+      "credits": 3,
+      "attributes": [
+        "School of Engineering"
+      ],
+      "prerequisites": "",
+      "source_schedule_note": "Imported from official visual timetable WhatsApp Image 2026-05-07 at 10.04.06 PM.jpeg",
+      "has_published_meetings": true
+    },
+    {
+      "term_code": "portal-spring-2025-2026",
+      "term_description": "Spring 2025-2026",
+      "code": "MATH 220",
+      "title": "Calculus III",
+      "section": "D",
+      "crn": "LIU-VISUAL-MATH-220-D-TUESDAY-THURSDAY-1230",
+      "instructor": "Haidar Badawi",
+      "campus": "All LIU Campuses",
+      "location": "TBA",
+      "days": "TR",
+      "time": "12:30 - 13:45",
+      "type": "Lecture",
+      "credits": 3,
+      "attributes": [
+        "School of Engineering"
+      ],
+      "prerequisites": "",
+      "source_schedule_note": "Imported from official visual timetable WhatsApp Image 2026-05-07 at 10.04.06 PM.jpeg",
+      "has_published_meetings": true
+    },
+    {
+      "term_code": "portal-spring-2025-2026",
+      "term_description": "Spring 2025-2026",
+      "code": "CENG 335",
+      "title": "Digital Logic II",
+      "section": "C",
+      "crn": "LIU-VISUAL-CENG-335-C-FRIDAY-1230",
+      "instructor": "Moustata Saleh",
+      "campus": "All LIU Campuses",
+      "location": "401-E",
+      "days": "F",
+      "time": "12:30 - 13:45",
+      "type": "Lecture",
+      "credits": 3,
+      "attributes": [
+        "School of Engineering"
+      ],
+      "prerequisites": "",
+      "source_schedule_note": "Imported from official visual timetable WhatsApp Image 2026-05-07 at 10.04.06 PM.jpeg",
+      "has_published_meetings": true
+    },
+    {
+      "term_code": "portal-spring-2025-2026",
+      "term_description": "Spring 2025-2026",
+      "code": "EENG 301L",
+      "title": "Electric Circuits Lab",
+      "section": "G",
+      "crn": "LIU-VISUAL-EENG-301L-G-WEDNESDAY-1400",
+      "instructor": "Sara Awada",
+      "campus": "All LIU Campuses",
+      "location": "305-A",
+      "days": "W",
+      "time": "14:00 - 15:15",
+      "type": "Lecture",
+      "credits": 1,
+      "attributes": [
+        "School of Engineering"
+      ],
+      "prerequisites": "",
+      "source_schedule_note": "Imported from official visual timetable WhatsApp Image 2026-05-07 at 10.04.06 PM.jpeg",
+      "has_published_meetings": true
+    }
+  ],
+  "courses": [],
+  "meta": {
+    "source_file": "D:\\WhatsApp Image 2026-05-07 at 10.04.06 PM.jpeg",
+    "generated_at": "2026-06-01T09:51:48.589Z"
+  }
+}
