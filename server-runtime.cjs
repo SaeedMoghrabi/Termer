@@ -1625,7 +1625,7 @@ app.post("/api/admin/announcements/:id/archive", async (req, res) => {
   }
 });
 
-app.get("/, (req, res) => { res.send(Termer is running.); }); if (fs.existsSync(CLIENT_DIST_DIR)) {
+app.get("/", (req, res) => { res.send("Termer is running."); }); if (fs.existsSync(CLIENT_DIST_DIR)) {
   app.use(express.static(CLIENT_DIST_DIR, { index: false }));
 
   app.get(/^\/(?!api\/).*/, (req, res) => {
