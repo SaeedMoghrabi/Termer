@@ -1625,11 +1625,22 @@ app.post("/api/admin/announcements/:id/archive", async (req, res) => {
   }
 });
 
-app.get("/", (req, res) => { res.send("Termer is running."); }); if (fs.existsSync(CLIENT_DIST_DIR)) {
+app.get("/health", (req, res) => {
+  res.type("text/plain").send("Termer is running.");
+});
+
+if (fs.existsSync(CLIENT_DIST_DIR)) {
   app.use(express.static(CLIENT_DIST_DIR, { index: false }));
 
-  app.get(/^\/(?!api\/).*/, (req, res) => {
+  const sendClientApp = (_req, res) => {
     res.sendFile(path.join(CLIENT_DIST_DIR, "index.html"));
+  };
+
+  app.get("/", sendClientApp);
+  app.get(/^\/(?!api\/|health$).*/, sendClientApp);
+} else {
+  app.get("/", (_req, res) => {
+    res.status(503).type("text/plain").send("Termer frontend build is missing.");
   });
 }
 
