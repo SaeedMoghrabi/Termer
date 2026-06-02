@@ -1,6 +1,6 @@
 import { getUniversityById } from "../config/universities.ts";
 import { mapApiCoursesToCourses } from "./courseApi.ts";
-import { fetchCourses, fetchTerms } from "./catalogApi.ts";
+import { fetchCatalogBootstrap, fetchCourses } from "./catalogApi.ts";
 import {
   getCachedCourses,
   getCachedTerms,
@@ -114,26 +114,40 @@ export async function primeUniversityCatalogCache(
 
   const task = (async () => {
     let terms: WarmTermOption[] = getCachedTerms(normalizedUniversityId);
-
-    try {
-      const remoteTerms = formatCatalogTerms(await fetchTerms(normalizedUniversityId));
-      if (remoteTerms.length > 0) {
-        terms = remoteTerms;
-        setCachedTerms(normalizedUniversityId, remoteTerms);
-      }
-    } catch {
-      // Keep any cached terms if the network path fails.
-    }
-
-    const selectedTermId = resolvePreferredTermId(
+    let selectedTermId = resolvePreferredTermId(
       normalizedUniversityId,
       terms,
       preferredTermId,
     );
-
     let selectedTermCourses = selectedTermId
       ? getCachedCourses(normalizedUniversityId, selectedTermId)
       : [];
+
+    try {
+      const bootstrap = await fetchCatalogBootstrap(normalizedUniversityId, preferredTermId);
+      const remoteTerms = formatCatalogTerms(bootstrap.terms);
+      if (remoteTerms.length > 0) {
+        terms = remoteTerms;
+        setCachedTerms(normalizedUniversityId, remoteTerms);
+      }
+
+      selectedTermId = resolvePreferredTermId(
+        normalizedUniversityId,
+        terms,
+        bootstrap.selectedTermId || preferredTermId,
+      );
+      selectedTermCourses = selectedTermId === bootstrap.selectedTermId
+        ? mapAndFilterUniversityCourses(bootstrap.courses, normalizedUniversityId)
+        : selectedTermId
+          ? getCachedCourses(normalizedUniversityId, selectedTermId)
+          : [];
+
+      if (selectedTermId && selectedTermCourses.length > 0) {
+        setCachedCourses(normalizedUniversityId, selectedTermId, selectedTermCourses);
+      }
+    } catch {
+      // Keep any cached terms if the bootstrap path fails.
+    }
 
     if (selectedTermId && selectedTermCourses.length === 0) {
       try {

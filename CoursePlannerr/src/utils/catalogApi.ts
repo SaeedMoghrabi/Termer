@@ -13,6 +13,14 @@ export interface CatalogTerm {
   university_id: string;
 }
 
+export interface CatalogBootstrapPayload {
+  universityId: string;
+  terms: CatalogTerm[];
+  selectedTermId: string;
+  courses: any[];
+  hasWarmCatalog: boolean;
+}
+
 const SEEDED_FALLBACK_UNIVERSITIES = new Set<string>(
   UNIVERSITY_OPTIONS.map((university) => university.id),
 );
@@ -64,6 +72,16 @@ function buildSeedTermCode(universityId: string, termCode: string) {
 function stripUniversityPrefix(universityId: string, termId: string) {
   const prefix = `${universityId}:`;
   return termId.startsWith(prefix) ? termId.slice(prefix.length) : termId;
+}
+
+function resolveSeedPreferredTermId(terms: CatalogTerm[], preferredTermId = "") {
+  const explicitTerm = terms.find((term) => term.code === preferredTermId)?.code;
+  if (explicitTerm) return explicitTerm;
+
+  const currentTerm = terms.find((term) => term.is_current)?.code;
+  if (currentTerm) return currentTerm;
+
+  return terms[0]?.code ?? "";
 }
 
 async function fetchSeedTerms(universityId: string): Promise<CatalogTerm[]> {
@@ -166,4 +184,36 @@ export async function fetchCourses(universityId: string, termId: string, search 
     const compactHaystack = haystack.replace(/\s+/g, "");
     return haystack.includes(normalizedSearch) || compactHaystack.includes(compactSearch);
   });
+}
+
+export async function fetchCatalogBootstrap(
+  universityId: string,
+  preferredTermId = "",
+): Promise<CatalogBootstrapPayload> {
+  try {
+    const payload = await fetchJson<CatalogBootstrapPayload>("/api/catalog-bootstrap", {
+      university: universityId,
+      preferredTerm: preferredTermId,
+    });
+
+    if (Array.isArray(payload?.terms)) {
+      return payload;
+    }
+  } catch {
+    // fall through to seeded snapshots when available
+  }
+
+  const terms = await fetchSeedTerms(universityId);
+  const selectedTermId = resolveSeedPreferredTermId(terms, preferredTermId);
+  const courses = selectedTermId
+    ? await fetchSeedCourses(universityId, selectedTermId)
+    : [];
+
+  return {
+    universityId,
+    terms,
+    selectedTermId,
+    courses,
+    hasWarmCatalog: terms.length > 0 && (!selectedTermId || courses.length > 0),
+  };
 }

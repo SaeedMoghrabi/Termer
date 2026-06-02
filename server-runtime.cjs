@@ -930,6 +930,27 @@ app.get("/api/universities", (req, res) => {
   res.json(getUniversitiesResponse());
 });
 
+app.get("/api/catalog-bootstrap", (req, res) => {
+  const universityId = String(req.query.university ?? "aub").trim().toLowerCase();
+  const preferredTermId = String(req.query.preferredTerm ?? "").trim();
+  const terms = getTermsForUniversity(universityId);
+  const selectedTermId = terms.find((term) => term.code === preferredTermId)?.code
+    ?? terms.find((term) => term.is_current)?.code
+    ?? terms[0]?.code
+    ?? "";
+  const courses = selectedTermId
+    ? getCoursesForTerm({ universityId, termId: selectedTermId, search: "" })
+    : [];
+
+  res.json({
+    universityId,
+    terms,
+    selectedTermId,
+    courses,
+    hasWarmCatalog: terms.length > 0 && (!selectedTermId || courses.length > 0),
+  });
+});
+
 app.get("/api/terms", (req, res) => {
   const universityId = String(req.query.university ?? "aub").trim().toLowerCase();
   res.json(getTermsForUniversity(universityId));

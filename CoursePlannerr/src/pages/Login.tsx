@@ -5,7 +5,11 @@ import { supabase } from "../supabaseClient.ts";
 import { API_ROOT as API_URL, buildAppUrl } from "../config/runtime.ts";
 import { detectUniversityFromEmail } from "../config/emailDomains.ts";
 import { getUniversityById, UNIVERSITY_OPTIONS, type UniversityOption } from "../config/universities.ts";
-import { setStoredUniversityId } from "../utils/plannerPreferences.ts";
+import {
+  getCachedCourses,
+  getCachedTerms,
+  setStoredUniversityId,
+} from "../utils/plannerPreferences.ts";
 import { primeUniversityCatalogCache } from "../utils/catalogWarmup.ts";
 import {
   clearLocalAdminSession,
@@ -142,6 +146,7 @@ export default function Login() {
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
   const [catalogPriming, setCatalogPriming] = useState(false);
+  const catalogPrefetchKeyRef = useRef("");
   const lastPhoneLookupEmailRef = useRef("");
   const lastAutofilledPhoneRef = useRef("");
   const emailDetection = detectUniversityFromEmail(email);
@@ -190,6 +195,35 @@ export default function Login() {
         return rememberedPhone;
       }
       return currentValue;
+    });
+  }, [email]);
+
+  useEffect(() => {
+    const detection = detectUniversityFromEmail(email.trim().toLowerCase());
+    if (!detection.allowed || !detection.universityId) {
+      catalogPrefetchKeyRef.current = "";
+      return;
+    }
+
+    const cachedTerms = getCachedTerms(detection.universityId);
+    const cachedTermId = cachedTerms.find((term) => term.id)?.id ?? "";
+    const cachedCourses = cachedTermId
+      ? getCachedCourses(detection.universityId, cachedTermId)
+      : [];
+    if (cachedTerms.length > 0 && (!cachedTermId || cachedCourses.length > 0)) {
+      catalogPrefetchKeyRef.current = detection.universityId;
+      return;
+    }
+
+    if (catalogPrefetchKeyRef.current === detection.universityId) {
+      return;
+    }
+
+    catalogPrefetchKeyRef.current = detection.universityId;
+    void primeUniversityCatalogCache(detection.universityId, { warmAllTerms: false }).catch(() => {
+      if (catalogPrefetchKeyRef.current === detection.universityId) {
+        catalogPrefetchKeyRef.current = "";
+      }
     });
   }, [email]);
 

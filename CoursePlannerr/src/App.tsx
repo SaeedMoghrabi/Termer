@@ -21,7 +21,7 @@ import {
   type UniversityOption,
 } from "./config/universities.ts";
 import { detectUniversityFromEmail } from "./config/emailDomains.ts";
-import { fetchCourses, fetchTerms, fetchUniversities } from "./utils/catalogApi.ts";
+import { fetchCatalogBootstrap, fetchCourses, fetchTerms, fetchUniversities } from "./utils/catalogApi.ts";
 import { useCatalogStatus } from "./hooks/useCatalogStatus.ts";
 import { useSessionAccess } from "./hooks/useSessionAccess.ts";
 import { primeUniversityCatalogCache } from "./utils/catalogWarmup.ts";
@@ -749,33 +749,39 @@ export default function App() {
     const requestId = termRequestIdRef.current + 1;
     termRequestIdRef.current = requestId;
     const requestUniversityId = universityId;
-    setTermsLoading(true);
+    const cachedTerms = getCachedTerms(requestUniversityId);
+    setTermsLoading(cachedTerms.length === 0);
 
-    fetchTerms(requestUniversityId)
-      .then(async (data) => {
+    fetchCatalogBootstrap(
+      requestUniversityId,
+      manualTermSelectionRef.current ?? semesterIdRef.current,
+    )
+      .then(async (bootstrap) => {
         if (requestId !== termRequestIdRef.current) return;
         const formatted = mergeVisibleTermSelection(
-          formatCatalogTerms(data),
+          formatCatalogTerms(bootstrap.terms),
           manualTermSelectionRef.current ?? "",
           semestersRef.current,
         );
         const currentSemesterId = semesterIdRef.current;
         const nextSemesterId = manualTermSelectionRef.current
-          && (
-            manualTermSelectionRef.current === currentSemesterId
-            || formatted.some((term) => term.id === manualTermSelectionRef.current)
-          )
+              && (
+                manualTermSelectionRef.current === currentSemesterId
+                || formatted.some((term) => term.id === manualTermSelectionRef.current)
+              )
           ? manualTermSelectionRef.current
           : resolvePreferredTermId(
               requestUniversityId,
               formatted,
-              currentSemesterId,
-              data.find((term) => term.is_current)?.code ?? "",
+              bootstrap.selectedTermId || currentSemesterId,
+              bootstrap.terms.find((term) => term.is_current)?.code ?? "",
             );
 
-        let primedCourses = nextSemesterId
-          ? getCachedCourses(requestUniversityId, nextSemesterId)
-          : [];
+        let primedCourses = nextSemesterId === bootstrap.selectedTermId
+          ? mapAndFilterUniversityCourses(bootstrap.courses, requestUniversityId)
+          : nextSemesterId
+            ? getCachedCourses(requestUniversityId, nextSemesterId)
+            : [];
 
         if (nextSemesterId && primedCourses.length === 0) {
           try {
@@ -807,8 +813,8 @@ export default function App() {
               : resolvePreferredTermId(
                   requestUniversityId,
                   formatted,
-                  currentSemesterId,
-                  data.find((term) => term.is_current)?.code ?? "",
+                  bootstrap.selectedTermId || currentSemesterId,
+                  bootstrap.terms.find((term) => term.is_current)?.code ?? "",
                 ),
           );
           if (primedCourses.length > 0) {
@@ -940,7 +946,7 @@ export default function App() {
     [allCourses],
   );
 
-  const loadCourses = useCallback(() => {
+  const loadCourses = useCallback((options?: { silent?: boolean }) => {
     if (!semesterId) {
       courseRequestIdRef.current += 1;
       courseDataSignatureRef.current = "";
@@ -962,7 +968,10 @@ export default function App() {
     const requestUniversityId = universityId;
     const requestTermId = semesterId;
     const preserveSelectedTerm = manualTermSelectionRef.current === requestTermId;
-    setCoursesLoading(true);
+    const silent = options?.silent ?? false;
+    if (!silent) {
+      setCoursesLoading(true);
+    }
     fetchCourses(universityId, semesterId)
       .then(async (data) => {
         if (requestId !== courseRequestIdRef.current) return;
@@ -1090,6 +1099,19 @@ export default function App() {
       });
     }
 
+    if (cachedCourses.length > 0) {
+      const refreshTimer = window.setTimeout(() => {
+        loadCourses({ silent: true });
+      }, 180);
+      const intervalTimer = window.setInterval(() => {
+        loadCourses({ silent: true });
+      }, CATALOG_POLL_INTERVAL_MS);
+      return () => {
+        window.clearTimeout(refreshTimer);
+        window.clearInterval(intervalTimer);
+      };
+    }
+
     loadCourses();
     const timer = window.setInterval(loadCourses, CATALOG_POLL_INTERVAL_MS);
     return () => window.clearInterval(timer);
@@ -1105,7 +1127,7 @@ export default function App() {
     loadUniversities();
     loadTerms();
     if (semesterIdRef.current) {
-      loadCourses();
+      loadCourses({ silent: true });
     }
   }, [catalogStatusSequence, loadCourses, loadTerms, loadUniversities]);
 
