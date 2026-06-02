@@ -11,23 +11,87 @@ function normalizeBasePath(value = "/") {
   return `/${normalized.replace(/^\/+|\/+$/g, "")}`;
 }
 
-function resolveApiRoot() {
-  const explicit = stripTrailingSlash(import.meta.env.VITE_API_URL || "");
-  if (explicit) return explicit;
-
+function resolveWindowOrigin() {
   if (typeof window === "undefined") return "";
-
-  const { protocol, hostname, port } = window.location;
-  if (!hostname) return "";
-
-  if (port === "5173" || port === "4173") {
-    return `${protocol}//${hostname}:3001`;
-  }
-
-  return "";
+  return stripTrailingSlash(window.location.origin || "");
 }
 
-export const API_ROOT = resolveApiRoot();
+function isLocalHost(hostname = "") {
+  return hostname === "localhost" || hostname === "127.0.0.1";
+}
+
+function resolveApiRoot() {
+  const explicit = stripTrailingSlash(import.meta.env.VITE_API_URL || "");
+  if (explicit) {
+    return {
+      viteApiUrl: explicit,
+      resolvedApiRoot: explicit,
+      origin: resolveWindowOrigin(),
+      usingExplicitApiUrl: true,
+      usingDevProxyFallback: false,
+      configurationWarning: "",
+    };
+  }
+
+  if (typeof window === "undefined") {
+    return {
+      viteApiUrl: "",
+      resolvedApiRoot: "",
+      origin: "",
+      usingExplicitApiUrl: false,
+      usingDevProxyFallback: false,
+      configurationWarning: "",
+    };
+  }
+
+  const { protocol, hostname, port } = window.location;
+  if (!hostname) {
+    return {
+      viteApiUrl: "",
+      resolvedApiRoot: "",
+      origin: resolveWindowOrigin(),
+      usingExplicitApiUrl: false,
+      usingDevProxyFallback: false,
+      configurationWarning: "Window location origin is unavailable.",
+    };
+  }
+
+  if (port === "5173" || port === "4173") {
+    return {
+      viteApiUrl: "",
+      resolvedApiRoot: `${protocol}//${hostname}:3001`,
+      origin: resolveWindowOrigin(),
+      usingExplicitApiUrl: false,
+      usingDevProxyFallback: true,
+      configurationWarning: "",
+    };
+  }
+
+  if (isLocalHost(hostname)) {
+    return {
+      viteApiUrl: "",
+      resolvedApiRoot: resolveWindowOrigin(),
+      origin: resolveWindowOrigin(),
+      usingExplicitApiUrl: false,
+      usingDevProxyFallback: false,
+      configurationWarning: "",
+    };
+  }
+
+  return {
+    viteApiUrl: "",
+    resolvedApiRoot: resolveWindowOrigin(),
+    origin: resolveWindowOrigin(),
+    usingExplicitApiUrl: false,
+    usingDevProxyFallback: false,
+    configurationWarning:
+      "VITE_API_URL is not set, so Termer is using the current site origin for API calls. Set VITE_API_URL when the frontend and backend are hosted separately.",
+  };
+}
+
+const runtimeApi = resolveApiRoot();
+
+export const API_ROOT = runtimeApi.resolvedApiRoot;
 export const APP_BASE_PATH = normalizeBasePath(import.meta.env.BASE_URL || import.meta.env.VITE_APP_BASE_PATH || "/");
 export const PUBLIC_SITE_URL = stripTrailingSlash(
   import.meta.env.VITE_PUBLIC_SITE_URL
@@ -35,6 +99,7 @@ export const PUBLIC_SITE_URL = stripTrailingSlash(
 );
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL;
 export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
+export const API_DIAGNOSTICS = runtimeApi;
 
 export function buildAppPath(pathname = "/") {
   const cleanPath = pathname.startsWith("/") ? pathname : `/${pathname}`;

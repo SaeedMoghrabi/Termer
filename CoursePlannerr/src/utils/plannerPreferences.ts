@@ -13,6 +13,7 @@ const COURSES_CACHE_KEY_PREFIX = "termer:catalog-courses:";
 const SCHEDULE_SNAPSHOT_KEY_PREFIX = "termer:schedule-snapshot:";
 const CLIENT_BUILD_KEY = "termer:client-build-id";
 const GUEST_SNAPSHOT_ID = "guest";
+const TERMER_STORAGE_PREFIX = "termer:";
 
 export type PlannerTermOption = {
   id: string;
@@ -196,4 +197,17 @@ export function reconcileClientBuild(buildId: string): void {
 
   keysToDelete.forEach((key) => window.localStorage.removeItem(key));
   window.localStorage.setItem(CLIENT_BUILD_KEY, buildId);
+}
+
+export function clearTermerClientState(): void {
+  if (!hasWindow()) return;
+
+  const keysToDelete: string[] = [];
+  for (let index = 0; index < window.localStorage.length; index += 1) {
+    const key = window.localStorage.key(index);
+    if (!key || !key.startsWith(TERMER_STORAGE_PREFIX)) continue;
+    keysToDelete.push(key);
+  }
+
+  keysToDelete.forEach((key) => window.localStorage.removeItem(key));
 }
