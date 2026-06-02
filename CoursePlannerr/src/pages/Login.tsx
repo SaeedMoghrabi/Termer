@@ -309,7 +309,7 @@ export default function Login() {
     setInfo("Preparing your university catalog…");
     setLoading(false);
     navigate("/");
-    void primeUniversityCatalogCache(detection.universityId, { warmAllTerms: true })
+    void primeUniversityCatalogCache(detection.universityId, { warmAllTerms: false })
       .catch(() => {
         // Keep sign-in resilient even if catalog warmup misses.
       })

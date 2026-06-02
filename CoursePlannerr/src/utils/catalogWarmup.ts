@@ -104,7 +104,7 @@ export async function primeUniversityCatalogCache(
 ): Promise<PrimeUniversityCatalogResult> {
   const normalizedUniversityId = getUniversityById(universityId).id;
   const preferredTermId = options?.preferredTermId ?? "";
-  const warmAllTerms = options?.warmAllTerms ?? true;
+  const warmAllTerms = options?.warmAllTerms ?? false;
   const taskKey = `${normalizedUniversityId}:${preferredTermId}:${warmAllTerms ? "all" : "one"}`;
   const existingTask = inFlightCatalogPrimes.get(taskKey);
 

@@ -627,7 +627,7 @@ export default function App() {
       return;
     }
 
-    void primeUniversityCatalogCache(nextUniversityId, { warmAllTerms: true })
+    void primeUniversityCatalogCache(nextUniversityId, { warmAllTerms: false })
       .catch(() => null)
       .finally(() => {
         setUniversityId((currentUniversityId) =>
@@ -887,57 +887,21 @@ export default function App() {
 
   const prewarmCatalogCaches = useCallback(() => {
     let cancelled = false;
-    const timers = new Set<number>();
-
-    const warmUniversityCatalog = async (targetUniversityId: string) => {
+    const timer = window.setTimeout(() => {
       if (cancelled) return;
-      try {
-        const termData = await fetchTerms(targetUniversityId);
-        const formattedTerms = formatCatalogTerms(termData);
-        if (!formattedTerms.length) return;
-
-        setCachedTerms(targetUniversityId, formattedTerms);
-        await Promise.allSettled(
-          formattedTerms.map(async (term) => {
-            if (!term.id || getCachedCourses(targetUniversityId, term.id).length > 0) {
-              return;
-            }
-
-            const courseData = await fetchCourses(targetUniversityId, term.id);
-            const mappedCourses = mapApiCoursesToCourses(courseData).filter(
-              (course) => course.universityId === targetUniversityId,
-            );
-
-            if (mappedCourses.length > 0) {
-              setCachedCourses(targetUniversityId, term.id, mappedCourses);
-            }
-          }),
-        );
-      } catch {
-        // Keep prewarming silent; the current university loader will still surface the active state.
-      }
-    };
-
-    void warmUniversityCatalog(universityId);
-
-    UNIVERSITY_OPTIONS
-      .map((university) => university.id)
-      .filter((targetUniversityId) => targetUniversityId !== universityId)
-      .forEach((targetUniversityId, index) => {
-        const timer = window.setTimeout(() => {
-          timers.delete(timer);
-          if (cancelled) return;
-          void warmUniversityCatalog(targetUniversityId);
-        }, 6_000 + (index * 2_500));
-        timers.add(timer);
+      void primeUniversityCatalogCache(universityId, {
+        preferredTermId: semesterId,
+        warmAllTerms: false,
+      }).catch(() => {
+        // Keep background priming silent; the visible loaders still handle active fetches.
       });
+    }, 1200);
 
     return () => {
       cancelled = true;
-      timers.forEach((timer) => window.clearTimeout(timer));
-      timers.clear();
+      window.clearTimeout(timer);
     };
-  }, [universityId]);
+  }, [semesterId, universityId]);
 
   useEffect(() => {
     termRequestIdRef.current += 1;
