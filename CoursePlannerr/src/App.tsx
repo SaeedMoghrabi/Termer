@@ -22,7 +22,13 @@ import {
   type UniversityOption,
 } from "./config/universities.ts";
 import { detectUniversityFromEmail } from "./config/emailDomains.ts";
-import { fetchCatalogBootstrap, fetchCourses, fetchTerms, fetchUniversities } from "./utils/catalogApi.ts";
+import {
+  fetchCatalogBootstrap,
+  fetchCourses,
+  fetchSeedCatalogBootstrap,
+  fetchTerms,
+  fetchUniversities,
+} from "./utils/catalogApi.ts";
 import { useCatalogStatus } from "./hooks/useCatalogStatus.ts";
 import { useSessionAccess } from "./hooks/useSessionAccess.ts";
 import { primeUniversityCatalogCache } from "./utils/catalogWarmup.ts";
@@ -799,6 +805,76 @@ export default function App() {
     const requestUniversityId = universityId;
     const cachedTerms = getCachedTerms(requestUniversityId);
     setTermsLoading(cachedTerms.length === 0);
+
+    if (cachedTerms.length === 0) {
+      void fetchSeedCatalogBootstrap(
+        requestUniversityId,
+        manualTermSelectionRef.current ?? semesterIdRef.current,
+      )
+        .then((seedBootstrap) => {
+          if (requestId !== termRequestIdRef.current) return;
+
+          const formatted = mergeVisibleTermSelection(
+            formatCatalogTerms(seedBootstrap.terms),
+            manualTermSelectionRef.current ?? "",
+            semestersRef.current,
+          );
+          const nextSemesterId = manualTermSelectionRef.current
+                && formatted.some((term) => term.id === manualTermSelectionRef.current)
+            ? manualTermSelectionRef.current
+            : resolvePreferredTermId(
+                requestUniversityId,
+                formatted,
+                seedBootstrap.selectedTermId || semesterIdRef.current,
+                seedBootstrap.terms.find((term) => term.is_current)?.code ?? "",
+              );
+
+          const primedCourses = nextSemesterId === seedBootstrap.selectedTermId
+            ? mapAndFilterUniversityCourses(seedBootstrap.courses, requestUniversityId)
+            : nextSemesterId
+              ? getCachedCourses(requestUniversityId, nextSemesterId)
+              : [];
+
+          if (formatted.length > 0) {
+            setCachedTerms(requestUniversityId, formatted);
+          }
+          if (nextSemesterId && primedCourses.length > 0) {
+            setCachedCourses(requestUniversityId, nextSemesterId, primedCourses);
+            courseDataSignatureRef.current = buildCourseDataSignature(primedCourses);
+          }
+
+          startTransition(() => {
+            if (formatted.length > 0) {
+              setSemesters(formatted);
+              setSemesterId((currentSemesterId) =>
+                manualTermSelectionRef.current
+                  && (
+                    manualTermSelectionRef.current === currentSemesterId
+                    || formatted.some((term) => term.id === manualTermSelectionRef.current)
+                  )
+                  ? manualTermSelectionRef.current
+                  : resolvePreferredTermId(
+                      requestUniversityId,
+                      formatted,
+                      seedBootstrap.selectedTermId || currentSemesterId,
+                      seedBootstrap.terms.find((term) => term.is_current)?.code ?? "",
+                    ),
+              );
+            }
+            if (primedCourses.length > 0) {
+              setAllCourses(primedCourses);
+            }
+          });
+        })
+        .catch(() => {
+          // The live bootstrap below still gets a chance; this is only a first-paint helper.
+        })
+        .finally(() => {
+          if (requestId === termRequestIdRef.current) {
+            setTermsLoading(false);
+          }
+        });
+    }
 
     fetchCatalogBootstrap(
       requestUniversityId,

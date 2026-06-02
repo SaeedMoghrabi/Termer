@@ -21,9 +21,9 @@ export interface CatalogBootstrapPayload {
   hasWarmCatalog: boolean;
 }
 
-const TERMS_FETCH_TIMEOUT_MS = 1_800;
-const COURSE_FETCH_TIMEOUT_MS = 2_200;
-const BOOTSTRAP_FETCH_TIMEOUT_MS = 1_800;
+const TERMS_FETCH_TIMEOUT_MS = 1_000;
+const COURSE_FETCH_TIMEOUT_MS = 1_200;
+const BOOTSTRAP_FETCH_TIMEOUT_MS = 900;
 
 const SEEDED_FALLBACK_UNIVERSITIES = new Set<string>(
   UNIVERSITY_OPTIONS.map((university) => university.id),
@@ -146,6 +146,25 @@ async function fetchSeedCourses(universityId: string, termId: string): Promise<a
     }));
 }
 
+export async function fetchSeedCatalogBootstrap(
+  universityId: string,
+  preferredTermId = "",
+): Promise<CatalogBootstrapPayload> {
+  const terms = await fetchSeedTerms(universityId);
+  const selectedTermId = resolveSeedPreferredTermId(terms, preferredTermId);
+  const courses = selectedTermId
+    ? await fetchSeedCourses(universityId, selectedTermId)
+    : [];
+
+  return {
+    universityId,
+    terms,
+    selectedTermId,
+    courses,
+    hasWarmCatalog: terms.length > 0 && (!selectedTermId || courses.length > 0),
+  };
+}
+
 export async function fetchUniversities(): Promise<UniversityOption[]> {
   try {
     return await fetchJson<UniversityOption[]>("/api/universities");
@@ -239,17 +258,5 @@ export async function fetchCatalogBootstrap(
     // fall through to seeded snapshots when available
   }
 
-  const terms = await fetchSeedTerms(universityId);
-  const selectedTermId = resolveSeedPreferredTermId(terms, preferredTermId);
-  const courses = selectedTermId
-    ? await fetchSeedCourses(universityId, selectedTermId)
-    : [];
-
-  return {
-    universityId,
-    terms,
-    selectedTermId,
-    courses,
-    hasWarmCatalog: terms.length > 0 && (!selectedTermId || courses.length > 0),
-  };
+  return fetchSeedCatalogBootstrap(universityId, preferredTermId);
 }

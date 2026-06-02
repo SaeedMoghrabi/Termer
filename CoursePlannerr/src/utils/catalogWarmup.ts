@@ -1,6 +1,6 @@
 import { getUniversityById } from "../config/universities.ts";
 import { mapApiCoursesToCourses } from "./courseApi.ts";
-import { fetchCatalogBootstrap, fetchCourses } from "./catalogApi.ts";
+import { fetchCatalogBootstrap, fetchCourses, fetchSeedCatalogBootstrap } from "./catalogApi.ts";
 import {
   getCachedCourses,
   getCachedTerms,
@@ -122,6 +122,34 @@ export async function primeUniversityCatalogCache(
     let selectedTermCourses = selectedTermId
       ? getCachedCourses(normalizedUniversityId, selectedTermId)
       : [];
+
+    if (terms.length === 0 && selectedTermCourses.length === 0) {
+      try {
+        const seedBootstrap = await fetchSeedCatalogBootstrap(normalizedUniversityId, preferredTermId);
+        const seedTerms = formatCatalogTerms(seedBootstrap.terms);
+        if (seedTerms.length > 0) {
+          terms = seedTerms;
+          setCachedTerms(normalizedUniversityId, seedTerms);
+        }
+
+        selectedTermId = resolvePreferredTermId(
+          normalizedUniversityId,
+          terms,
+          seedBootstrap.selectedTermId || preferredTermId,
+        );
+        selectedTermCourses = selectedTermId === seedBootstrap.selectedTermId
+          ? mapAndFilterUniversityCourses(seedBootstrap.courses, normalizedUniversityId)
+          : selectedTermId
+            ? getCachedCourses(normalizedUniversityId, selectedTermId)
+            : [];
+
+        if (selectedTermId && selectedTermCourses.length > 0) {
+          setCachedCourses(normalizedUniversityId, selectedTermId, selectedTermCourses);
+        }
+      } catch {
+        // Keep going; the live bootstrap still gets a chance next.
+      }
+    }
 
     try {
       const bootstrap = await fetchCatalogBootstrap(normalizedUniversityId, preferredTermId);
