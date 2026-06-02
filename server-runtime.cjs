@@ -16,6 +16,7 @@ const {
   getTermsForUniversity,
   getUniversitiesResponse,
   reloadCatalogCache,
+  setCatalogRefreshInProgress,
 } = require("./catalogStore.cjs");
 const {
   buildAdvisorLocalResponse,
@@ -44,7 +45,6 @@ const {
   updatePreviousDocument,
 } = require("./previousesStore.cjs");
 const { ingestPreviousUpload } = require("./previousesModeration.cjs");
-const { buildCatalogs } = require("./scripts/buildCatalogs.cjs");
 const { IMPORT_ROOTS } = require("./scripts/manualTimedImports.cjs");
 const { buildVisualTimedImports } = require("./scripts/visualTimedImports.cjs");
 const { getCurriculumStatus, reloadCurriculumPlans } = require("./curriculumPlans.cjs");
@@ -286,6 +286,41 @@ function runCurriculumBuildProcess() {
   });
 }
 
+function runCatalogBuildProcess() {
+  const builderPath = path.join(__dirname, "scripts", "buildCatalogs.cjs");
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [builderPath], {
+      cwd: __dirname,
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+
+    child.on("error", (error) => {
+      reject(error);
+    });
+
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve({ stdout, stderr });
+        return;
+      }
+      const message = stderr.trim() || stdout.trim() || `Catalog build exited with code ${code}.`;
+      reject(new Error(message));
+    });
+  });
+}
+
 async function runVisualImportBuild(reason = "visual import") {
   if (visualImportBuildPromise) return visualImportBuildPromise;
 
@@ -327,8 +362,10 @@ async function runCatalogRefresh(reason = "manual") {
       lastRefreshError: null,
     });
     console.log(`[catalogs] refresh start (${reason})`);
+    setCatalogRefreshInProgress(true);
     try {
-      await buildCatalogs();
+      await runCatalogBuildProcess();
+      setCatalogRefreshInProgress(false);
       reloadCatalogCache();
       setCatalogRuntimeStatus({
         lastCurriculumRefreshStartedAt: new Date().toISOString(),
@@ -365,6 +402,7 @@ async function runCatalogRefresh(reason = "manual") {
       });
       console.log(`[catalogs] refresh complete (${reason}) in ${Math.round((Date.now() - startedAt) / 1000)}s`);
     } catch (error) {
+      setCatalogRefreshInProgress(false);
       reloadCatalogCache();
       setCatalogRuntimeStatus({
         lastRefreshFinishedAt: new Date().toISOString(),
@@ -372,6 +410,7 @@ async function runCatalogRefresh(reason = "manual") {
       });
       console.error(`[catalogs] refresh failed (${reason}): ${error?.message || error}`);
     } finally {
+      setCatalogRefreshInProgress(false);
       catalogRefreshPromise = null;
       const nextReason = queuedCatalogRefreshReason;
       queuedCatalogRefreshReason = "";

@@ -15,6 +15,7 @@ const DATA_DIR = path.join(__dirname, "data", "catalogs");
 const SEED_DIR = path.join(__dirname, "CoursePlannerr", "public", "seed-catalogs");
 const SUPPLEMENTAL_PREREQUISITES_PATH = path.join(DATA_DIR, "prerequisites.json");
 const catalogCache = new Map();
+let holdStaleCatalogCache = false;
 const DAY_CODE_TO_LABEL = {
   M: "Monday",
   T: "Tuesday",
@@ -484,7 +485,7 @@ function loadCatalog(universityId) {
   if (!config) return null;
   const signature = buildCatalogSignature(universityId);
   const cached = catalogCache.get(universityId);
-  if (cached && cached.signature === signature) return cached.catalog;
+  if (cached && (cached.signature === signature || holdStaleCatalogCache)) return cached.catalog;
 
   const payload = chooseCatalogPayload(universityId);
   if (!payload) {
@@ -592,6 +593,10 @@ function reloadCatalogCache(universityId = "") {
     return;
   }
   catalogCache.clear();
+}
+
+function setCatalogRefreshInProgress(value) {
+  holdStaleCatalogCache = Boolean(value);
 }
 
 function matchesCourseSearch(course, search) {
@@ -738,4 +743,5 @@ module.exports = {
   getTermsForUniversity,
   getUniversitiesResponse,
   reloadCatalogCache,
+  setCatalogRefreshInProgress,
 };

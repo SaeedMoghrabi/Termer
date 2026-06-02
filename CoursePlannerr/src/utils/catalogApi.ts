@@ -21,6 +21,10 @@ export interface CatalogBootstrapPayload {
   hasWarmCatalog: boolean;
 }
 
+const TERMS_FETCH_TIMEOUT_MS = 1_800;
+const COURSE_FETCH_TIMEOUT_MS = 2_200;
+const BOOTSTRAP_FETCH_TIMEOUT_MS = 1_800;
+
 const SEEDED_FALLBACK_UNIVERSITIES = new Set<string>(
   UNIVERSITY_OPTIONS.map((university) => university.id),
 );
@@ -35,7 +39,11 @@ type SeedCatalog = {
   courses?: any[];
 };
 
-async function fetchJson<T>(path: string, params?: Record<string, string>): Promise<T> {
+async function fetchJson<T>(
+  path: string,
+  params?: Record<string, string>,
+  options?: { timeoutMs?: number },
+): Promise<T> {
   const url = new URL(`${API_ROOT}${path}`, window.location.origin);
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
@@ -45,7 +53,23 @@ async function fetchJson<T>(path: string, params?: Record<string, string>): Prom
     });
   }
 
-  const response = await fetch(url.toString(), { cache: "no-store" });
+  const controller = options?.timeoutMs ? new AbortController() : null;
+  const timeoutId = controller
+    ? window.setTimeout(() => controller.abort(new DOMException("Request timed out", "AbortError")), options.timeoutMs)
+    : null;
+
+  let response: Response;
+  try {
+    response = await fetch(url.toString(), {
+      cache: "no-store",
+      signal: controller?.signal,
+    });
+  } finally {
+    if (timeoutId !== null) {
+      window.clearTimeout(timeoutId);
+    }
+  }
+
   if (!response.ok) {
     throw new Error(`Request failed: ${response.status}`);
   }
@@ -132,7 +156,11 @@ export async function fetchUniversities(): Promise<UniversityOption[]> {
 
 export async function fetchTerms(universityId: string): Promise<CatalogTerm[]> {
   try {
-    const terms = await fetchJson<CatalogTerm[]>("/api/terms", { university: universityId });
+    const terms = await fetchJson<CatalogTerm[]>(
+      "/api/terms",
+      { university: universityId },
+      { timeoutMs: TERMS_FETCH_TIMEOUT_MS },
+    );
     if (Array.isArray(terms) && terms.length > 0) {
       return terms;
     }
@@ -145,11 +173,15 @@ export async function fetchTerms(universityId: string): Promise<CatalogTerm[]> {
 
 export async function fetchCourses(universityId: string, termId: string, search = ""): Promise<any[]> {
   try {
-    const courses = await fetchJson<any[]>("/api/courses", {
-      university: universityId,
-      term: termId,
-      search,
-    });
+    const courses = await fetchJson<any[]>(
+      "/api/courses",
+      {
+        university: universityId,
+        term: termId,
+        search,
+      },
+      { timeoutMs: COURSE_FETCH_TIMEOUT_MS },
+    );
 
     if (Array.isArray(courses) && (courses.length > 0 || !SEEDED_FALLBACK_UNIVERSITIES.has(universityId))) {
       return courses;
@@ -191,10 +223,14 @@ export async function fetchCatalogBootstrap(
   preferredTermId = "",
 ): Promise<CatalogBootstrapPayload> {
   try {
-    const payload = await fetchJson<CatalogBootstrapPayload>("/api/catalog-bootstrap", {
-      university: universityId,
-      preferredTerm: preferredTermId,
-    });
+    const payload = await fetchJson<CatalogBootstrapPayload>(
+      "/api/catalog-bootstrap",
+      {
+        university: universityId,
+        preferredTerm: preferredTermId,
+      },
+      { timeoutMs: BOOTSTRAP_FETCH_TIMEOUT_MS },
+    );
 
     if (Array.isArray(payload?.terms)) {
       return payload;

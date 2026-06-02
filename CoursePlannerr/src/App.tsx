@@ -6,6 +6,7 @@ import { TopNav } from "./components/TopNav";
 import { LeftInfoPanel } from "./components/LeftInfoPanel";
 import { ScheduleGrid } from "./components/ScheduleGrid";
 import { RightSearchPanel } from "./components/RightSearchPanel";
+import { AIScheduler } from "./components/AiScheduler.tsx";
 import { PlannerErrorBoundary } from "./components/PlannerErrorBoundary.tsx";
 import Login from "./pages/Login";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -120,11 +121,6 @@ const EmptyClassesPage = lazy(() => import("./pages/EmptyClasses.tsx"));
 const GPAPage = lazy(() => import("./pages/GPAPage"));
 const GradeCalculatorPage = lazy(() => import("./components/GradeCalculator"));
 const AdminPortalPage = lazy(() => import("./pages/AdminPortal"));
-const AIScheduler = lazy(() =>
-  import("./components/AiScheduler.tsx").then((module) => ({
-    default: module.AIScheduler,
-  })),
-);
 
 const COURSE_COLORS = [
   "#1a5fa8",
@@ -851,6 +847,9 @@ export default function App() {
 
         setCachedTerms(requestUniversityId, formatted);
         if (primedCourses.length > 0) {
+          if (nextSemesterId) {
+            setCachedCourses(requestUniversityId, nextSemesterId, primedCourses);
+          }
           courseDataSignatureRef.current = buildCourseDataSignature(primedCourses);
         }
         startTransition(() => {
@@ -1914,28 +1913,26 @@ export default function App() {
           />
         </PlannerErrorBoundary>
       </main>
-      <Suspense fallback={null}>
-        <PlannerErrorBoundary
-          resetKey={`${coursePanelsResetKey}:ai-assistant`}
-          sectionName="AI assistant"
-          compact
-        >
-          <AIScheduler
-            allCourses={allCourses}
-            scheduledCourses={scheduled}
-            favoriteCourses={visibleFavorites}
-            selectedCourse={displayedCourse ?? selectedCourse}
-            selectedCrns={selectedCrns}
-            semesterLabel={semesterLabel}
-            termId={semesterId}
-            catalogUpdatedAt={currentUniversity.updatedAt ?? null}
-            onApplySchedule={handleApplyAISchedule}
-            activeSlot={activeSlot}
-            universityId={universityId}
-            universityName={currentUniversity.name}
-          />
-        </PlannerErrorBoundary>
-      </Suspense>
+      <PlannerErrorBoundary
+        resetKey={`${coursePanelsResetKey}:ai-assistant`}
+        sectionName="AI assistant"
+        compact
+      >
+        <AIScheduler
+          allCourses={allCourses}
+          scheduledCourses={scheduled}
+          favoriteCourses={visibleFavorites}
+          selectedCourse={displayedCourse ?? selectedCourse}
+          selectedCrns={selectedCrns}
+          semesterLabel={semesterLabel}
+          termId={semesterId}
+          catalogUpdatedAt={currentUniversity.updatedAt ?? null}
+          onApplySchedule={handleApplyAISchedule}
+          activeSlot={activeSlot}
+          universityId={universityId}
+          universityName={currentUniversity.name}
+        />
+      </PlannerErrorBoundary>
     </div>
   );
 
