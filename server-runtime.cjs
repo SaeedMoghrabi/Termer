@@ -85,6 +85,11 @@ function normalizeOrigin(value = "") {
 
 const publicSiteUrl = stripTrailingSlash(process.env.PUBLIC_SITE_URL || "");
 const canonicalOrigin = normalizeOrigin(publicSiteUrl);
+const runningOnRender = Boolean(
+  process.env.RENDER
+  || process.env.RENDER_INSTANCE_ID
+  || process.env.RENDER_SERVICE_ID,
+);
 const configuredAllowedOrigins = new Set(
   [
     ...parseCsvList(process.env.ALLOWED_ORIGINS),
@@ -192,9 +197,21 @@ function envNumber(value, fallback) {
 }
 
 const catalogAutoRefreshEnabled = envFlag(process.env.CATALOG_AUTO_REFRESH, true);
-const catalogRefreshOnStart = envFlag(process.env.CATALOG_AUTO_REFRESH_ON_START, true);
+const catalogRefreshOnStart = envFlag(process.env.CATALOG_AUTO_REFRESH_ON_START, !runningOnRender);
 const catalogRefreshIntervalMinutes = envNumber(process.env.CATALOG_REFRESH_INTERVAL_MINUTES, 2);
 const catalogRefreshIntervalMs = catalogRefreshIntervalMinutes * 60 * 1000;
+const catalogStartupRefreshDelayMs = envNumber(
+  process.env.CATALOG_STARTUP_REFRESH_DELAY_MS,
+  runningOnRender ? 15000 : 0,
+);
+const manualImportWatchersEnabled = envFlag(
+  process.env.ENABLE_MANUAL_IMPORT_WATCHERS,
+  !runningOnRender,
+);
+const visualImportBuildOnStart = envFlag(
+  process.env.VISUAL_IMPORT_BUILD_ON_START,
+  !runningOnRender,
+);
 
 let catalogRefreshPromise = null;
 let manualImportRefreshTimer = null;
@@ -1675,8 +1692,17 @@ if (fs.existsSync(CLIENT_DIST_DIR)) {
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
-  startManualImportWatchers();
-  void runVisualImportBuild("startup");
+  reloadCatalogCache();
+  if (manualImportWatchersEnabled) {
+    startManualImportWatchers();
+  } else {
+    console.log("[catalogs] manual import watchers disabled for this runtime.");
+  }
+  if (visualImportBuildOnStart) {
+    void runVisualImportBuild("startup");
+  } else {
+    console.log("[visual-imports] startup visual import build disabled for this runtime.");
+  }
   const initialCurriculumStatus = reloadCurriculumPlans();
   setCatalogRuntimeStatus({
     curriculumPlanCount: Number(initialCurriculumStatus?.totalPlans ?? 0) || 0,
@@ -1684,10 +1710,15 @@ app.listen(PORT, () => {
     curriculumGeneratedAt: initialCurriculumStatus?.generatedAt ?? null,
     curriculumByUniversity: initialCurriculumStatus?.byUniversity ?? {},
   });
-  if (catalogRefreshOnStart) {
-    void runCatalogRefresh("startup");
-  } else if (catalogAutoRefreshEnabled) {
-    reloadCatalogCache();
+      if (catalogRefreshOnStart) {
+    if (catalogStartupRefreshDelayMs > 0) {
+      console.log(`[catalogs] startup refresh scheduled in ${Math.round(catalogStartupRefreshDelayMs / 1000)} second(s).`);
+      setTimeout(() => {
+        void runCatalogRefresh("startup");
+      }, catalogStartupRefreshDelayMs);
+    } else {
+      void runCatalogRefresh("startup");
+    }
   }
   if (catalogAutoRefreshEnabled) {
     console.log(`[catalogs] auto-refresh enabled every ${Math.round(catalogRefreshIntervalMs / 60000)} minute(s).`);
