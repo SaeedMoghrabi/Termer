@@ -1,7 +1,7 @@
 import { lazy, Suspense, useMemo, useState, useEffect, useCallback, useRef, startTransition } from "react";
 import { Routes, Route } from "react-router-dom";
 import "./App.css";
-import type { Course } from "./types";
+import type { Course, Day } from "./types";
 import { TopNav } from "./components/TopNav";
 import { LeftInfoPanel } from "./components/LeftInfoPanel";
 import { ScheduleGrid } from "./components/ScheduleGrid";
@@ -368,16 +368,62 @@ type PlannerSettings = {
   lockedCourseIds: string[];
 };
 
+const VALID_DAY_CODES = new Set<Day>(["M", "T", "W", "R", "F", "S"]);
+
 function getPlannerSettingsKey(userId: string | null, universityId: string, termId: string) {
   return `${PLANNER_SETTINGS_STORAGE_PREFIX}${userId ?? "guest"}:${universityId}:${termId || "no-term"}`;
+}
+
+function sanitizeBlockedTimes(value: unknown): BlockedTime[] {
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((entry, index) => {
+    if (!entry || typeof entry !== "object") return [];
+    const rawEntry = entry as Partial<BlockedTime> & { days?: unknown };
+    const rawDays = rawEntry.days;
+    const rawDaysText = typeof rawDays === "string" ? String(rawDays) : "";
+    const days = Array.isArray(rawDays)
+      ? rawDays.filter((day): day is Day => VALID_DAY_CODES.has(day as Day))
+      : rawDaysText
+        ? rawDaysText
+            .toUpperCase()
+            .split("")
+            .filter((day): day is Day => VALID_DAY_CODES.has(day as Day))
+        : [];
+    const start = typeof rawEntry.start === "string" ? rawEntry.start : "";
+    const end = typeof rawEntry.end === "string" ? rawEntry.end : "";
+    const startMinutes = timeToMinutes(start);
+    const endMinutes = timeToMinutes(end);
+
+    if (!days.length || startMinutes === null || endMinutes === null || endMinutes <= startMinutes) {
+      return [];
+    }
+
+    return [{
+      id: String(rawEntry.id ?? `block-${index}`).trim() || `block-${index}`,
+      label: String(rawEntry.label ?? "Busy").trim() || "Busy",
+      days,
+      start,
+      end,
+    }];
+  });
+}
+
+function sanitizeLockedCourseIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(
+    value
+      .map((entry) => String(entry ?? "").trim())
+      .filter(Boolean),
+  )];
 }
 
 function readPlannerSettings(key: string): PlannerSettings {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(key) ?? "{}") as Partial<PlannerSettings>;
     return {
-      blockedTimes: Array.isArray(parsed.blockedTimes) ? parsed.blockedTimes : [],
-      lockedCourseIds: Array.isArray(parsed.lockedCourseIds) ? parsed.lockedCourseIds : [],
+      blockedTimes: sanitizeBlockedTimes(parsed.blockedTimes),
+      lockedCourseIds: sanitizeLockedCourseIds(parsed.lockedCourseIds),
     };
   } catch {
     return { blockedTimes: [], lockedCourseIds: [] };
@@ -385,7 +431,13 @@ function readPlannerSettings(key: string): PlannerSettings {
 }
 
 function writePlannerSettings(key: string, settings: PlannerSettings) {
-  window.localStorage.setItem(key, JSON.stringify(settings));
+  window.localStorage.setItem(
+    key,
+    JSON.stringify({
+      blockedTimes: sanitizeBlockedTimes(settings.blockedTimes),
+      lockedCourseIds: sanitizeLockedCourseIds(settings.lockedCourseIds),
+    }),
+  );
 }
 
 function uniqueCourses(courses: Course[]) {
@@ -1270,8 +1322,8 @@ export default function App() {
       .then(({ data }) => {
         if (cancelled) return;
         if (!data) return;
-        setBlockedTimes(Array.isArray(data.blocked_times) ? data.blocked_times : []);
-        setLockedCourseIds(Array.isArray(data.locked_course_ids) ? data.locked_course_ids : []);
+        setBlockedTimes(sanitizeBlockedTimes(data.blocked_times));
+        setLockedCourseIds(sanitizeLockedCourseIds(data.locked_course_ids));
       });
     return () => {
       cancelled = true;
@@ -1280,7 +1332,10 @@ export default function App() {
 
   useEffect(() => {
     if (!plannerSettingsLoaded || !semesterId) return;
-    const settings = { blockedTimes, lockedCourseIds };
+    const settings = {
+      blockedTimes: sanitizeBlockedTimes(blockedTimes),
+      lockedCourseIds: sanitizeLockedCourseIds(lockedCourseIds),
+    };
     writePlannerSettings(plannerSettingsKey, settings);
 
     if (!userId) return;
@@ -1289,8 +1344,8 @@ export default function App() {
         user_id: userId,
         university_id: universityId,
         term_id: semesterId,
-        blocked_times: blockedTimes,
-        locked_course_ids: lockedCourseIds,
+        blocked_times: settings.blockedTimes,
+        locked_course_ids: settings.lockedCourseIds,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "user_id,university_id,term_id" },
@@ -1695,23 +1750,44 @@ export default function App() {
   }, [activeSlot, customColors, saveSlot, scheduled]);
 
   const handleRecoverFromPlannerError = useCallback(() => {
+    const emptySchedules = createEmptySchedules();
     setSelectedCourse(null);
     setHoveredCourse(null);
     setSchedulePreviewCourse(null);
     setGeneratedSchedules([]);
-    setLockedCourseIds((currentLockedIds) =>
-      currentLockedIds.filter((courseId) => !scheduled.some((course) => course.id === courseId)),
-    );
-    setSchedules((prev) => ({
-      ...prev,
-      [activeSlot]: [],
-    }));
-    saveSlot(activeSlot, [], customColors);
-  }, [activeSlot, customColors, saveSlot, scheduled]);
+    setBlockedTimes([]);
+    setLockedCourseIds([]);
+    setCustomColors(new Map());
+    setSchedules(emptySchedules);
+
+    if (semesterId) {
+      setCachedScheduleSnapshot(userId, universityId, semesterId, {
+        schedules: emptySchedules,
+        colors: [],
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
+    writePlannerSettings(plannerSettingsKey, {
+      blockedTimes: [],
+      lockedCourseIds: [],
+    });
+
+    saveSlot(1, []);
+    saveSlot(2, []);
+    saveSlot(3, []);
+  }, [plannerSettingsKey, saveSlot, semesterId, universityId, userId]);
 
   const plannerResetKey = useMemo(
-    () => `${universityId}:${semesterId}:${activeSlot}:${scheduled.map((course) => course.id).sort().join("|")}`,
-    [activeSlot, scheduled, semesterId, universityId],
+    () => [
+      universityId,
+      semesterId,
+      activeSlot,
+      scheduled.map((course) => course.id).sort().join("|"),
+      blockedTimes.map((block) => `${block.id}:${block.days.join("")}:${block.start}:${block.end}`).sort().join("|"),
+      lockedCourseIds.slice().sort().join("|"),
+    ].join(":"),
+    [activeSlot, blockedTimes, lockedCourseIds, scheduled, semesterId, universityId],
   );
 
   const mainApp = (

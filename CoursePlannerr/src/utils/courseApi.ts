@@ -506,7 +506,14 @@ export function sanitizeCourse(rawCourse: any): Course {
 
 export function sanitizeCourses(rawCourses: unknown): Course[] {
   if (!Array.isArray(rawCourses)) return [];
-  return rawCourses.map((course) => sanitizeCourse(course));
+  return rawCourses.flatMap((course) => {
+    try {
+      return [sanitizeCourse(course)];
+    } catch (error) {
+      console.warn("Skipping unreadable course record.", error, course);
+      return [];
+    }
+  });
 }
 
 export function mapApiCourseToCourse(rawCourse: any): Course {
@@ -562,7 +569,7 @@ export function mapApiCoursesToCourses(rawCourses: any[]): Course[] {
 
   const mergedCourses = new Map<string, Course>();
 
-  rawCourses.map(mapApiCourseToCourse).forEach((course) => {
+  sanitizeCourses(rawCourses).forEach((course) => {
     const mergeKey = buildCourseMergeKey(course);
     const existing = mergedCourses.get(mergeKey);
     mergedCourses.set(
