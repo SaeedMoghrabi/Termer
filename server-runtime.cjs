@@ -105,8 +105,7 @@ if (trustProxyEnabled) {
   app.set("trust proxy", 1);
 }
 
-app.disable("x-powered-by");
-app.use(cors({
+const apiCors = cors({
   origin(origin, callback) {
     if (!origin) {
       callback(null, true);
@@ -127,7 +126,9 @@ app.use(cors({
     callback(new Error(`Origin not allowed: ${normalizedOrigin}`));
   },
   credentials: false,
-}));
+});
+
+app.disable("x-powered-by");
 app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || "15mb" }));
 app.use((req, res, next) => {
   if (enforceCanonicalOrigin && canonicalOrigin && req.method === "GET") {
@@ -152,6 +153,7 @@ app.use((req, res, next) => {
   }
   next();
 });
+app.use("/api", apiCors);
 app.use("/api", (req, res, next) => {
   res.setHeader("Cache-Control", "no-store");
   next();
