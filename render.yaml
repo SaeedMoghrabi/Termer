@@ -1,0 +1,57 @@
+services:
+  - type: web
+    name: termer-api
+    runtime: node
+    rootDir: .
+    buildCommand: npm install --legacy-peer-deps && npx playwright install chromium
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "20"
+      - key: PUBLIC_SITE_URL
+        value: https://termer-frontend.onrender.com
+      - key: ALLOWED_ORIGINS
+        value: https://termer-frontend.onrender.com,https://termer.app,https://www.termer.app
+      - key: TRUST_PROXY
+        value: "true"
+      - key: ENFORCE_CANONICAL_ORIGIN
+        value: "false"
+      - key: ENABLE_HSTS
+        value: "false"
+      - key: CATALOG_AUTO_REFRESH
+        value: "true"
+      - key: CATALOG_AUTO_REFRESH_ON_START
+        value: "false"
+      - key: CATALOG_REFRESH_INTERVAL_MINUTES
+        value: "2"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+
+  - type: web
+    name: termer-frontend
+    runtime: static
+    rootDir: CoursePlannerr
+    buildCommand: npm install --legacy-peer-deps && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: termer-api
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: VITE_PUBLIC_SITE_URL
+        value: https://termer-frontend.onrender.com
+      - key: VITE_APP_BASE_PATH
+        value: /
+      - key: VITE_SUPABASE_URL
+        value: https://wymsmputeifyemyprlpt.supabase.co
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
