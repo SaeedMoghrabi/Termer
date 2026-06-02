@@ -5,10 +5,14 @@ type Props = {
   resetKey: string;
   onReset?: () => void;
   onAutoRecover?: () => void;
+  sectionName?: string;
+  compact?: boolean;
+  resetLabel?: string;
 };
 
 type State = {
   hasError: boolean;
+  errorMessage: string;
 };
 
 export class PlannerErrorBoundary extends Component<Props, State> {
@@ -17,14 +21,24 @@ export class PlannerErrorBoundary extends Component<Props, State> {
 
   state: State = {
     hasError: false,
+    errorMessage: "",
   };
 
-  static getDerivedStateFromError() {
-    return { hasError: true };
+  static getDerivedStateFromError(error: unknown) {
+    const message = error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : "Unknown render error";
+    return { hasError: true, errorMessage: message };
   }
 
-  componentDidCatch(error: unknown) {
-    console.error("Planner rendering error", error);
+  componentDidCatch(error: unknown, info: { componentStack: string }) {
+    console.error(
+      `Planner rendering error${this.props.sectionName ? ` in ${this.props.sectionName}` : ""}`,
+      error,
+      info,
+    );
 
     if (this.autoRecoverKey === this.props.resetKey) {
       return;
@@ -47,7 +61,7 @@ export class PlannerErrorBoundary extends Component<Props, State> {
     if (prevProps.resetKey !== this.props.resetKey) {
       this.autoRecoverKey = null;
       if (this.state.hasError) {
-        this.setState({ hasError: false });
+        this.setState({ hasError: false, errorMessage: "" });
       }
     }
   }
@@ -60,7 +74,7 @@ export class PlannerErrorBoundary extends Component<Props, State> {
 
   private handleReset = () => {
     this.props.onReset?.();
-    this.setState({ hasError: false });
+    this.setState({ hasError: false, errorMessage: "" });
   };
 
   render() {
@@ -68,17 +82,31 @@ export class PlannerErrorBoundary extends Component<Props, State> {
       return this.props.children;
     }
 
+    const issueLabel = this.props.sectionName
+      ? `${this.props.sectionName} hit a render problem.`
+      : "The current course view hit a bad course record.";
+
     return (
-      <div className="plannerCrashFallback" role="alert" aria-live="assertive">
+      <div
+        className={`plannerCrashFallback${this.props.compact ? " plannerCrashFallback--compact" : ""}`}
+        role="alert"
+        aria-live="assertive"
+      >
         <div className="plannerCrashFallback__eyebrow">Recovered planner state</div>
-        <strong>The current course view hit a bad course record.</strong>
+        <strong>{issueLabel}</strong>
         <span>
-          Termer kept the page alive instead of blanking the whole screen. You can
-          clear the current schedule and keep working, or reload the page once.
+          {this.props.compact
+            ? "Termer isolated this panel so the rest of the page can keep working."
+            : "Termer kept the page alive instead of blanking the whole screen. You can clear the current schedule and keep working, or reload the page once."}
         </span>
+        {this.state.errorMessage ? (
+          <span className="plannerCrashFallback__detail">
+            Issue: {this.state.errorMessage}
+          </span>
+        ) : null}
         <div className="plannerCrashFallback__actions">
           <button type="button" onClick={this.handleReset}>
-            Clear current schedule
+            {this.props.resetLabel ?? (this.props.compact ? "Retry panel" : "Clear current schedule")}
           </button>
           <button type="button" onClick={() => window.location.reload()}>
             Reload planner

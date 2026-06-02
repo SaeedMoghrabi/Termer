@@ -1790,16 +1790,28 @@ export default function App() {
     [activeSlot, blockedTimes, lockedCourseIds, scheduled, semesterId, universityId],
   );
 
+  const coursePanelsResetKey = useMemo(
+    () => [
+      plannerResetKey,
+      allCourses.length,
+      semesters.length,
+      displayedCourse?.id ?? "no-course",
+      activeLeftTab,
+      catalogLoading ? "loading" : "ready",
+    ].join(":"),
+    [activeLeftTab, allCourses.length, catalogLoading, displayedCourse?.id, plannerResetKey, semesters.length],
+  );
+
   const mainApp = (
-    <PlannerErrorBoundary
-      resetKey={plannerResetKey}
-      onReset={handleRecoverFromPlannerError}
-      onAutoRecover={handleRecoverFromPlannerError}
-    >
-      <div className="appShell">
-        <a className="skipLink" href="#planner-main">
-          Skip to planner
-        </a>
+    <div className="appShell">
+      <a className="skipLink" href="#planner-main">
+        Skip to planner
+      </a>
+      <PlannerErrorBoundary
+        resetKey={`${universityId}:${semesterId}:top-nav`}
+        sectionName="header"
+        compact
+      >
         <TopNav
           appName={appName}
           universityId={universityId}
@@ -1815,11 +1827,17 @@ export default function App() {
           activePage="home"
           canChangeUniversity={canChooseAnyUniversity}
         />
-        <main
-          className={`mainContainer${isCompactMobileHome ? " mainContainer--compactMobileHome" : ""}`}
-          id="planner-main"
-        >
-          {!isCompactMobileHome ? (
+      </PlannerErrorBoundary>
+      <main
+        className={`mainContainer${isCompactMobileHome ? " mainContainer--compactMobileHome" : ""}`}
+        id="planner-main"
+      >
+        {!isCompactMobileHome ? (
+          <PlannerErrorBoundary
+            resetKey={`${coursePanelsResetKey}:left-panel`}
+            sectionName="course details panel"
+            compact
+          >
             <LeftInfoPanel
               activeTab={activeLeftTab}
               onTabChange={(tab) => {
@@ -1837,7 +1855,16 @@ export default function App() {
               onToggleFavorite={toggleFavorite}
               onToggleLockedCourse={handleToggleLockedCourse}
             />
-          ) : null}
+          </PlannerErrorBoundary>
+        ) : null}
+        <PlannerErrorBoundary
+          resetKey={`${plannerResetKey}:schedule-grid`}
+          onReset={handleRecoverFromPlannerError}
+          onAutoRecover={handleRecoverFromPlannerError}
+          sectionName="schedule grid"
+          compact
+          resetLabel="Clear current schedule"
+        >
           <ScheduleGrid
             courses={scheduled}
             hoveredCourse={schedulePreviewCourse}
@@ -1849,6 +1876,12 @@ export default function App() {
             onRemoveCourse={toggleSchedule}
             semesterLabel={semesterLabel}
           />
+        </PlannerErrorBoundary>
+        <PlannerErrorBoundary
+          resetKey={`${coursePanelsResetKey}:search-panel`}
+          sectionName="course search panel"
+          compact
+        >
           <RightSearchPanel
             allCourses={allCourses}
             catalogLoading={catalogLoading}
@@ -1879,8 +1912,14 @@ export default function App() {
             onRecoverCatalogCourses={handleRecoverCatalogCourses}
             compactMobileHome={isCompactMobileHome}
           />
-        </main>
-        <Suspense fallback={null}>
+        </PlannerErrorBoundary>
+      </main>
+      <Suspense fallback={null}>
+        <PlannerErrorBoundary
+          resetKey={`${coursePanelsResetKey}:ai-assistant`}
+          sectionName="AI assistant"
+          compact
+        >
           <AIScheduler
             allCourses={allCourses}
             scheduledCourses={scheduled}
@@ -1895,9 +1934,9 @@ export default function App() {
             universityId={universityId}
             universityName={currentUniversity.name}
           />
-        </Suspense>
-      </div>
-    </PlannerErrorBoundary>
+        </PlannerErrorBoundary>
+      </Suspense>
+    </div>
   );
 
   return (

@@ -1429,14 +1429,22 @@ function RightSearchPanelComponent({
     return Array.from(merged.values());
   }, [effectiveCourses, remoteSearchCourses]);
 
-  const linkedSectionIndex = useMemo(
-    () => buildLinkedSectionIndex(searchableCourses),
-    [searchableCourses],
-  );
-  const courseSearchIndex = useMemo(
-    () => buildCourseSearchIndex(searchableCourses),
-    [searchableCourses],
-  );
+  const linkedSectionIndex = useMemo(() => {
+    try {
+      return buildLinkedSectionIndex(searchableCourses);
+    } catch (error) {
+      console.error("Failed to build linked-section index.", error, searchableCourses);
+      return new Map<string, Course[]>();
+    }
+  }, [searchableCourses]);
+  const courseSearchIndex = useMemo(() => {
+    try {
+      return buildCourseSearchIndex(searchableCourses);
+    } catch (error) {
+      console.error("Failed to build course search index.", error, searchableCourses);
+      return new Map<string, CourseSearchRecord>();
+    }
+  }, [searchableCourses]);
   const scheduledIds = useMemo(
     () => new Set(scheduled.map((course) => course.id)),
     [scheduled],
@@ -1482,24 +1490,29 @@ function RightSearchPanelComponent({
     [deferredQuery],
   );
   const availableAttributes = useMemo(() => {
-    const attributes = new Map<string, AttributeOption>();
+    try {
+      const attributes = new Map<string, AttributeOption>();
 
-    searchableCourses.forEach((course) => {
-      const seenOnCourse = new Set<string>();
-      course.attributes?.forEach((attribute) => {
-        const label = normalizeAttributeLabel(attribute);
-        const key = normalizeAttributeKey(label);
-        if (!key || seenOnCourse.has(key)) return;
-        seenOnCourse.add(key);
+      searchableCourses.forEach((course) => {
+        const seenOnCourse = new Set<string>();
+        course.attributes?.forEach((attribute) => {
+          const label = normalizeAttributeLabel(attribute);
+          const key = normalizeAttributeKey(label);
+          if (!key || seenOnCourse.has(key)) return;
+          seenOnCourse.add(key);
 
-        const current = attributes.get(key) ?? { key, label, count: 0 };
-        current.count += 1;
-        attributes.set(key, current);
+          const current = attributes.get(key) ?? { key, label, count: 0 };
+          current.count += 1;
+          attributes.set(key, current);
+        });
       });
-    });
 
-    return [...attributes.values()]
-      .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label));
+      return [...attributes.values()]
+        .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label));
+    } catch (error) {
+      console.error("Failed to build attribute filters.", error, searchableCourses);
+      return [] as AttributeOption[];
+    }
   }, [searchableCourses]);
   const selectedAttribute = useMemo(
     () => availableAttributes.find((attribute) => attribute.key === selectedAttributeKey) ?? null,
@@ -1682,97 +1695,102 @@ function RightSearchPanelComponent({
   const results = useMemo(() => {
     if (!hasDeferredSearchIntent) return [] as Course[];
 
-    const filtered = searchableCourses.filter((course) => {
-      const searchRecord = courseSearchIndex.get(course.id);
-      const isScheduled = scheduledIds.has(course.id);
-      const matchesExactCourseFamily = courseMatchesExactCourseFamily(course, exactCourseIntent);
+    try {
+      const filtered = searchableCourses.filter((course) => {
+        const searchRecord = courseSearchIndex.get(course.id);
+        const isScheduled = scheduledIds.has(course.id);
+        const matchesExactCourseFamily = courseMatchesExactCourseFamily(course, exactCourseIntent);
 
-      if (
-        parsedQuery.generalTokens.length > 0
-        && !matchesExactCourseFamily
-        && !parsedQuery.generalTokens.every((token) => {
-          return courseMatchesGeneralToken(course, token, searchRecord);
-        })
-      ) {
-        return false;
-      }
-      if (parsedQuery.department && !course.department.toLowerCase().includes(parsedQuery.department)) {
-        return false;
-      }
-      if (parsedQuery.professor && !course.instructor.toLowerCase().includes(parsedQuery.professor)) {
-        return false;
-      }
-      if (parsedQuery.crn && !String(course.crn).toLowerCase().includes(parsedQuery.crn)) {
-        return false;
-      }
-      if (parsedQuery.scheduleType && !String(course.scheduleType ?? "").toLowerCase().includes(parsedQuery.scheduleType)) {
-        return false;
-      }
-      if (
-        parsedQuery.attribute
-        && !courseMatchesAttributeQuery(course, parsedQuery.attribute)
-      ) {
-        return false;
-      }
-      if (
-        selectedAttributeKey !== "all"
-        && !courseHasAttribute(course, selectedAttributeKey)
-      ) {
-        return false;
-      }
-      if (parsedQuery.dayFilters.length > 0 && !course.meetings.some((meeting) => meeting.days.some((day) => parsedQuery.dayFilters.includes(day)))) {
-        return false;
-      }
-      if ((openSeatsOnly || parsedQuery.openOnly) && getOpenSeats(course) <= 0) {
-        return false;
-      }
-      if (parsedQuery.linkedOnly && !course.isSectionLinked) {
-        return false;
-      }
-      if (excludeFriday && course.meetings.some((meeting) => meeting.days.includes("F"))) {
-        return false;
-      }
-      if (!matchesTimePreset(course, timePreset)) {
-        return false;
-      }
-      if (hideConflicts && !isScheduled && courseConflictsWithSchedule(course, scheduled)) {
-        return false;
-      }
+        if (
+          parsedQuery.generalTokens.length > 0
+          && !matchesExactCourseFamily
+          && !parsedQuery.generalTokens.every((token) => {
+            return courseMatchesGeneralToken(course, token, searchRecord);
+          })
+        ) {
+          return false;
+        }
+        if (parsedQuery.department && !course.department.toLowerCase().includes(parsedQuery.department)) {
+          return false;
+        }
+        if (parsedQuery.professor && !course.instructor.toLowerCase().includes(parsedQuery.professor)) {
+          return false;
+        }
+        if (parsedQuery.crn && !String(course.crn).toLowerCase().includes(parsedQuery.crn)) {
+          return false;
+        }
+        if (parsedQuery.scheduleType && !String(course.scheduleType ?? "").toLowerCase().includes(parsedQuery.scheduleType)) {
+          return false;
+        }
+        if (
+          parsedQuery.attribute
+          && !courseMatchesAttributeQuery(course, parsedQuery.attribute)
+        ) {
+          return false;
+        }
+        if (
+          selectedAttributeKey !== "all"
+          && !courseHasAttribute(course, selectedAttributeKey)
+        ) {
+          return false;
+        }
+        if (parsedQuery.dayFilters.length > 0 && !course.meetings.some((meeting) => meeting.days.some((day) => parsedQuery.dayFilters.includes(day)))) {
+          return false;
+        }
+        if ((openSeatsOnly || parsedQuery.openOnly) && getOpenSeats(course) <= 0) {
+          return false;
+        }
+        if (parsedQuery.linkedOnly && !course.isSectionLinked) {
+          return false;
+        }
+        if (excludeFriday && course.meetings.some((meeting) => meeting.days.includes("F"))) {
+          return false;
+        }
+        if (!matchesTimePreset(course, timePreset)) {
+          return false;
+        }
+        if (hideConflicts && !isScheduled && courseConflictsWithSchedule(course, scheduled)) {
+          return false;
+        }
 
-      return true;
-    });
+        return true;
+      });
 
-    const exactCourseFamilyMatches = exactCourseIntent
-      ? filtered.filter((course) => courseMatchesExactCourseFamily(course, exactCourseIntent))
-      : [];
-    const scopedResults = exactCourseFamilyMatches.length > 0
-      ? exactCourseFamilyMatches
-      : filtered;
+      const exactCourseFamilyMatches = exactCourseIntent
+        ? filtered.filter((course) => courseMatchesExactCourseFamily(course, exactCourseIntent))
+        : [];
+      const scopedResults = exactCourseFamilyMatches.length > 0
+        ? exactCourseFamilyMatches
+        : filtered;
 
-    scopedResults.sort((left, right) => {
-      const shouldPreferMatchSort = effectiveDeferredSearchMode === "crn";
+      scopedResults.sort((left, right) => {
+        const shouldPreferMatchSort = effectiveDeferredSearchMode === "crn";
 
-      if (sortMode === "course" && !shouldPreferMatchSort) {
-        return compareCourseCatalogOrderForQuery(left, right, deferredQuery);
-      }
-      if (sortMode === "earliest") {
-        return getCourseFirstStart(left) - getCourseFirstStart(right);
-      }
-      if (sortMode === "latest") {
-        return getCourseLastStart(right) - getCourseLastStart(left);
-      }
-      if (sortMode === "openSeats") {
-        return getOpenSeats(right) - getOpenSeats(left);
-      }
+        if (sortMode === "course" && !shouldPreferMatchSort) {
+          return compareCourseCatalogOrderForQuery(left, right, deferredQuery);
+        }
+        if (sortMode === "earliest") {
+          return getCourseFirstStart(left) - getCourseFirstStart(right);
+        }
+        if (sortMode === "latest") {
+          return getCourseLastStart(right) - getCourseLastStart(left);
+        }
+        if (sortMode === "openSeats") {
+          return getOpenSeats(right) - getOpenSeats(left);
+        }
 
-      const leftScore = getMatchScore(left, deferredQuery, scheduledIds.has(left.id), favoriteIds.has(left.id));
-      const rightScore = getMatchScore(right, deferredQuery, scheduledIds.has(right.id), favoriteIds.has(right.id));
-      return rightScore - leftScore
-        || compareCourseCatalogOrderForQuery(left, right, deferredQuery)
-        || getOpenSeats(right) - getOpenSeats(left);
-    });
+        const leftScore = getMatchScore(left, deferredQuery, scheduledIds.has(left.id), favoriteIds.has(left.id));
+        const rightScore = getMatchScore(right, deferredQuery, scheduledIds.has(right.id), favoriteIds.has(right.id));
+        return rightScore - leftScore
+          || compareCourseCatalogOrderForQuery(left, right, deferredQuery)
+          || getOpenSeats(right) - getOpenSeats(left);
+      });
 
-    return scopedResults.slice(0, SEARCH_RESULT_LIMIT);
+      return scopedResults.slice(0, SEARCH_RESULT_LIMIT);
+    } catch (error) {
+      console.error("Failed to build visible course results.", error, searchableCourses);
+      return [] as Course[];
+    }
   }, [
     courseSearchIndex,
     deferredQuery,

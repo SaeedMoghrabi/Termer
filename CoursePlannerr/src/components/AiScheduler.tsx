@@ -818,6 +818,7 @@ export function AIScheduler({
   }, [catalogUpdatedAt, loading, semesterLabel, termId, universityId, universityName]);
 
   useEffect(() => {
+    if (!open) return undefined;
     let cancelled = false;
     fetch(`${API}/api/ai-status`)
       .then((res) => res.json())
@@ -837,7 +838,7 @@ export function AIScheduler({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [open]);
 
   const quickPrompts = getUniversityWelcomeProfile(universityId).prompts;
 

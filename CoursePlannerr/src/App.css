@@ -7378,6 +7378,18 @@ body.light .rightPanel__scroll::-webkit-scrollbar-thumb {
   color: var(--text);
 }
 
+.plannerCrashFallback--compact {
+  min-height: 280px;
+  place-items: stretch;
+  align-content: center;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at top right, rgba(var(--brand-primary-rgb), 0.14), transparent 42%),
+    var(--panel);
+}
+
 .plannerCrashFallback > * {
   max-width: 520px;
 }
@@ -7402,6 +7414,13 @@ body.light .rightPanel__scroll::-webkit-scrollbar-thumb {
   display: block;
   color: var(--muted);
   line-height: 1.6;
+}
+
+.plannerCrashFallback__detail {
+  margin-top: 10px;
+  font-size: 12px;
+  color: color-mix(in srgb, var(--text) 80%, var(--muted) 20%);
+  word-break: break-word;
 }
 
 .plannerCrashFallback__actions {
