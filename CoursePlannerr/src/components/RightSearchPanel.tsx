@@ -1195,8 +1195,6 @@ function RightSearchPanelComponent({
   const deferredQuery = useDeferredValue(query);
   const [recoveredCourses, setRecoveredCourses] = useState<Course[]>([]);
   const [catalogRecoveryLoading, setCatalogRecoveryLoading] = useState(false);
-  const [remoteSearchCourses, setRemoteSearchCourses] = useState<Course[]>([]);
-  const [remoteSearchLoading, setRemoteSearchLoading] = useState(false);
   const [sortMode, setSortMode] = useState<SortMode>("course");
   const [timePreset, setTimePreset] = useState<TimePreset>("all");
   const [selectedAttributeKey, setSelectedAttributeKey] = useState("all");
@@ -1367,67 +1365,7 @@ function RightSearchPanelComponent({
     };
   }, [allCourses.length, onRecoverCatalogCourses, termId, universityId]);
 
-  useEffect(() => {
-    const trimmedQuery = deferredQuery.trim();
-    if (!trimmedQuery || !universityId || !termId) {
-      setRemoteSearchCourses([]);
-      setRemoteSearchLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    setRemoteSearchLoading(true);
-
-    const loadRemoteMatches = async () => {
-      try {
-        const params = new URLSearchParams({
-          university: universityId,
-          term: termId,
-          search: trimmedQuery,
-        });
-        const response = await fetch(`${API}/api/courses?${params.toString()}`);
-        if (!response.ok) {
-          throw new Error(`Remote search failed: ${response.status}`);
-        }
-
-        const rawCourses = await response.json();
-        const mappedCourses = mapApiCoursesToCourses(rawCourses).filter(
-          (course) => course.universityId === universityId,
-        );
-
-        if (!cancelled) {
-          setRemoteSearchCourses(mappedCourses);
-        }
-      } catch {
-        if (!cancelled) {
-          setRemoteSearchCourses([]);
-        }
-      } finally {
-        if (!cancelled) {
-          setRemoteSearchLoading(false);
-        }
-      }
-    };
-
-    void loadRemoteMatches();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [deferredQuery, termId, universityId]);
-
-  const searchableCourses = useMemo(() => {
-    if (!remoteSearchCourses.length) return effectiveCourses;
-
-    const merged = new Map<string, Course>();
-    effectiveCourses.forEach((course) => merged.set(course.id, course));
-    remoteSearchCourses.forEach((course) => {
-      if (!merged.has(course.id)) {
-        merged.set(course.id, course);
-      }
-    });
-    return Array.from(merged.values());
-  }, [effectiveCourses, remoteSearchCourses]);
+  const searchableCourses = useMemo(() => effectiveCourses, [effectiveCourses]);
 
   const linkedSectionIndex = useMemo(() => {
     try {
@@ -1688,7 +1626,6 @@ function RightSearchPanelComponent({
   const showLiveSearchLoading = hasSearchIntent
     && (
       searchIsUpdating
-      || remoteSearchLoading
       || (searchableCourses.length === 0 && (catalogLoading || catalogRecoveryLoading))
     );
 
