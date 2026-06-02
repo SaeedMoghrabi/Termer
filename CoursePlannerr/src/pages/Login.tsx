@@ -25,6 +25,7 @@ type FieldProps = {
 };
 
 const LOGIN_PHONE_BY_EMAIL_STORAGE_KEY = "termer:login-phone-by-email";
+const CONTACT_PROFILE_TIMEOUT_MS = 1800;
 
 const UNIVERSITY_NAME_ALIASES: Record<string, string[]> = {
   aub: ["aub", "american university of beirut", "mail.aub.edu", "aub.edu.lb"],
@@ -215,10 +216,13 @@ export default function Login() {
   }) => {
     const normalizedPhone = phoneNumber.replace(/[^\d+]/g, "");
     if (!normalizedPhone) return;
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), CONTACT_PROFILE_TIMEOUT_MS);
     try {
       const response = await fetch(`${API_URL}/api/account/contact-profile`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           userId,
           email: userEmail,
@@ -231,6 +235,8 @@ export default function Login() {
       }
     } catch {
       // Keep auth resilient even if contact profile storage misses.
+    } finally {
+      window.clearTimeout(timeoutId);
     }
   };
 
@@ -274,12 +280,12 @@ export default function Login() {
     rememberPhone(norm, phoneNumber);
     const detection = ensureSupportedEmail(norm);
     if (!detection) return;
-    await saveContactProfile({
+    setLoading(true);
+    void saveContactProfile({
       userEmail: norm,
       universityId: detection.universityId,
     });
     clearLocalAdminSession();
-    setLoading(true);
     const { data, error: err } = await supabase.auth.signInWithPassword({ email: norm, password });
     if (err) {
       setLoading(false);
@@ -293,22 +299,23 @@ export default function Login() {
       setError("Authentication failed.");
       return;
     }
-    await syncUserProfile(data.user.id, data.user.email ?? norm);
-    await saveContactProfile({
+    void syncUserProfile(data.user.id, data.user.email ?? norm);
+    void saveContactProfile({
       userId: data.user.id,
       userEmail: data.user.email ?? norm,
       universityId: detection.universityId,
     });
     setCatalogPriming(true);
     setInfo("Preparing your university catalog…");
-    try {
-      await primeUniversityCatalogCache(detection.universityId, { warmAllTerms: true });
-    } catch {
-      // Keep sign-in resilient even if catalog warmup misses.
-    }
-    setCatalogPriming(false);
     setLoading(false);
     navigate("/");
+    void primeUniversityCatalogCache(detection.universityId, { warmAllTerms: true })
+      .catch(() => {
+        // Keep sign-in resilient even if catalog warmup misses.
+      })
+      .finally(() => {
+        setCatalogPriming(false);
+      });
   };
 
   const handleSignUp = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -321,11 +328,11 @@ export default function Login() {
     if (password.length < 8) { setError("Password must be at least 8 characters."); return; }
     if (password !== confirmPassword) { setError("Passwords do not match."); return; }
     rememberPhone(norm, phoneNumber);
-    await saveContactProfile({
+    setLoading(true);
+    void saveContactProfile({
       userEmail: norm,
       universityId: detection.universityId,
     });
-    setLoading(true);
     const { data: existingUser } = await supabase.from("users").select("id").eq("email", norm).maybeSingle();
     if (existingUser) {
       setLoading(false);
@@ -342,7 +349,7 @@ export default function Login() {
     setLoading(false);
     if (err) { setError(err.message || "Sign-up failed."); return; }
     if (data?.user?.id) {
-      await saveContactProfile({
+      void saveContactProfile({
         userId: data.user.id,
         userEmail: data.user.email ?? norm,
         universityId: detection.universityId,
