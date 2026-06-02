@@ -12,6 +12,10 @@ coverage/
 data/runtime/
 data/reports/
 .playwright-temp-lu/
+playwright-report/
+test-results/
+tmp/
+temp/
 eng.traineddata
 big-test-2.txt
 cd
