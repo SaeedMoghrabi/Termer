@@ -469,10 +469,13 @@ function startManualImportWatchers() {
 }
 
 function buildUniversityContext(universityId, catalogStats = null) {
-  const fallbackUniversity = getUniversitiesResponse().find((entry) => entry.id === universityId);
+  const providedName = String(catalogStats?.universityName ?? "").trim();
+  const fallbackUniversity = providedName
+    ? null
+    : getUniversitiesResponse().find((entry) => entry.id === universityId);
   return {
     id: universityId,
-    name: String(catalogStats?.universityName ?? fallbackUniversity?.name ?? universityId.toUpperCase()).trim(),
+    name: String(providedName || fallbackUniversity?.name || universityId.toUpperCase()).trim(),
   };
 }
 
@@ -1361,22 +1364,12 @@ app.post("/api/ai-schedule", async (req, res) => {
     const universityId = normalizeUniversityId(req.body?.universityId || req.body?.catalogStats?.universityId || "aub") || "aub";
     const requestedTermId = normalizeTermId(req.body?.termId || req.body?.catalogStats?.termId || "");
     const requestedSemesterLabel = String(req.body?.semesterLabel ?? req.body?.catalogStats?.semesterLabel ?? "").trim();
-    const university = buildUniversityContext(universityId, req.body?.catalogStats ?? null);
     const intent = getAdvisorIntent(message);
     const selectedCourse = req.body?.selectedCourse || null;
     const relevantCourses = array(req.body?.relevantCourses).slice(0, 80);
     const sections = array(req.body?.sections).slice(0, 80);
     const favoriteCourses = array(req.body?.favoriteCourses).slice(0, 40);
     const scheduledCourses = array(req.body?.scheduledCourses).slice(0, 40);
-    const universityTerms = getTermsForUniversity(universityId);
-    const resolvedTerm = resolveAdvisorTermSelection(
-      universityId,
-      requestedTermId,
-      requestedSemesterLabel,
-      universityTerms,
-    );
-    const effectiveTermId = resolvedTerm.effectiveTermId || requestedTermId;
-    const semesterLabel = resolvedTerm.effectiveTermLabel || requestedSemesterLabel;
     const mergedCourses = mergeAdvisorCourses(
       sections,
       relevantCourses,
@@ -1384,11 +1377,35 @@ app.post("/api/ai-schedule", async (req, res) => {
       favoriteCourses,
       selectedCourse ? [selectedCourse] : [],
     ).slice(0, 160);
+    const needsCatalogLookup = mergedCourses.length === 0;
+    const needsUniversityWideCourses = Boolean(
+      selectedCourse
+      || intent.courseInquiry
+      || intent.broadCourseQuestion
+      || intent.abbreviationMeaning,
+    );
+    const needsUniversityTerms = Boolean(needsCatalogLookup || needsUniversityWideCourses);
+    const universityTerms = needsUniversityTerms ? getTermsForUniversity(universityId) : [];
+    const resolvedTerm = needsUniversityTerms
+      ? resolveAdvisorTermSelection(
+          universityId,
+          requestedTermId,
+          requestedSemesterLabel,
+          universityTerms,
+        )
+      : {
+          effectiveTermId: requestedTermId,
+          effectiveTermLabel: requestedSemesterLabel,
+          resolutionNote: "",
+        };
+    const effectiveTermId = resolvedTerm.effectiveTermId || requestedTermId;
+    const semesterLabel = resolvedTerm.effectiveTermLabel || requestedSemesterLabel;
+    const incomingCatalogStats = req.body?.catalogStats ?? null;
+    const university = buildUniversityContext(universityId, incomingCatalogStats);
     const liveCatalogCourses = mergedCourses.length
       ? []
       : getCoursesForTerm({ universityId, termId: effectiveTermId, search: "" }).slice(0, 160);
     const advisorCourses = (mergedCourses.length ? mergedCourses : liveCatalogCourses).slice(0, 160);
-    const incomingCatalogStats = req.body?.catalogStats ?? null;
     const catalogStats = incomingCatalogStats && typeof incomingCatalogStats === "object"
       ? {
           ...incomingCatalogStats,
@@ -1396,7 +1413,7 @@ app.post("/api/ai-schedule", async (req, res) => {
           universityName: university.name,
           semesterLabel: requestedSemesterLabel || incomingCatalogStats.semesterLabel || "",
           termId: effectiveTermId || incomingCatalogStats.termId || "",
-          updatedAt: incomingCatalogStats.updatedAt ?? getUniversitiesResponse().find((entry) => entry.id === universityId)?.updatedAt ?? null,
+          updatedAt: incomingCatalogStats.updatedAt ?? null,
           resolutionNote: resolvedTerm.resolutionNote || incomingCatalogStats.resolutionNote || "",
           effectiveTermLabel: semesterLabel || incomingCatalogStats.effectiveTermLabel || incomingCatalogStats.semesterLabel || "",
         }
@@ -1409,16 +1426,10 @@ app.post("/api/ai-schedule", async (req, res) => {
             universityTerms,
             effectiveTermId,
             effectiveTermLabel: semesterLabel,
-            updatedAt: getUniversitiesResponse().find((entry) => entry.id === universityId)?.updatedAt ?? null,
+            updatedAt: null,
             resolutionNote: resolvedTerm.resolutionNote,
           },
         );
-    const needsUniversityWideCourses = Boolean(
-      selectedCourse
-      || intent.courseInquiry
-      || intent.broadCourseQuestion
-      || intent.abbreviationMeaning,
-    );
     const universityWideCourses = needsUniversityWideCourses
       ? getAllCoursesForUniversity(universityId).slice(0, 1200)
       : advisorCourses;

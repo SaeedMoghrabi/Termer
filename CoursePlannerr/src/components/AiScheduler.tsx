@@ -2,6 +2,8 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import type { Course } from "../types";
 import { API_ROOT as API } from "../config/runtime.ts";
+import { fetchSeedCatalogBootstrap } from "../utils/catalogApi.ts";
+import { mapApiCoursesToCourses } from "../utils/courseApi.ts";
 
 type Message = { role: "user" | "assistant"; content: string };
 type AiStatus = {
@@ -624,6 +626,41 @@ function formatSnapshotFreshness(updatedAt?: string | null) {
   return `Snapshot freshness: synced ${parsed.toLocaleString()}.`;
 }
 
+async function loadAiCoursePool(
+  currentCourses: Course[],
+  universityId: string,
+  preferredTermId: string,
+): Promise<Course[]> {
+  if (currentCourses.length >= 24) {
+    return currentCourses;
+  }
+
+  try {
+    const bootstrap = await fetchSeedCatalogBootstrap(universityId, preferredTermId);
+    const seededCourses = mapApiCoursesToCourses(Array.isArray(bootstrap?.courses) ? bootstrap.courses : []).filter(
+      (course) => course.universityId === universityId,
+    );
+    if (!seededCourses.length) {
+      return currentCourses;
+    }
+
+    if (!currentCourses.length) {
+      return seededCourses;
+    }
+
+    const merged = new Map<string, Course>();
+    currentCourses.forEach((course) => merged.set(course.id, course));
+    seededCourses.forEach((course) => {
+      if (!merged.has(course.id)) {
+        merged.set(course.id, course);
+      }
+    });
+    return Array.from(merged.values());
+  } catch {
+    return currentCourses;
+  }
+}
+
 async function postAiSchedule(payload: unknown) {
   let lastError: Error | null = null;
 
@@ -824,16 +861,17 @@ export function AIScheduler({
     setLoading(true);
 
     try {
+      const aiCourses = await loadAiCoursePool(allCourses, universityId, termId);
       const courseCodes = extractCourseCodes(text);
       const courseCodeKeys = courseCodes.map(compact);
       const advisorQuestion = isAdvisorQuestion(text);
       const relevantCourses = advisorQuestion
-        ? findAdvisorRelevantCourses(text, allCourses, universityId)
-        : findRelevantCourses(text, allCourses);
+        ? findAdvisorRelevantCourses(text, aiCourses, universityId)
+        : findRelevantCourses(text, aiCourses);
       const scopedRelevantCourses = relevantCourses.slice(0, advisorQuestion ? 80 : 30);
       const sections =
         courseCodes.length > 0
-          ? allCourses.filter((c) =>
+          ? aiCourses.filter((c) =>
               courseCodeKeys.some((code) => compact(c.code) === code || compact(c.code).startsWith(code)),
             ).slice(0, 80)
           : scopedRelevantCourses;
@@ -847,7 +885,7 @@ export function AIScheduler({
         selectedCourse: selectedCourse ? courseToAiPayload(selectedCourse) : null,
         selectedCrns,
         catalogStats: {
-          ...buildCatalogStats(allCourses, universityName, semesterLabel),
+          ...buildCatalogStats(aiCourses, universityName, semesterLabel),
           updatedAt: catalogUpdatedAt ?? null,
         },
         activeSlot,
@@ -882,7 +920,7 @@ export function AIScheduler({
       if (contextStillCurrent && expectsScheduleProposal) {
         const picked = resolveScheduledCourses(
           Array.isArray(data.schedule) ? data.schedule : [],
-          allCourses,
+          aiCourses,
           Array.isArray(data.scheduleCourses) ? data.scheduleCourses : [],
         );
         const fallbackPicked = Array.isArray(data.scheduleCourses)
@@ -891,7 +929,7 @@ export function AIScheduler({
               .filter(Boolean) as Course[]
           : [];
         const summaryPicked = typeof data.summary === "string"
-          ? resolveScheduleFromSummary(data.summary, allCourses)
+          ? resolveScheduleFromSummary(data.summary, aiCourses)
           : [];
         const nextProposal = picked.length
           ? picked
