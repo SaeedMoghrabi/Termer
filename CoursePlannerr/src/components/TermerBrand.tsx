@@ -30,22 +30,22 @@ export function TermerMark({
       aria-label={decorative ? undefined : title}
     >
       {!decorative && <title>{title}</title>}
-      <rect x="0" y="0" width="46" height="28" rx={SLOT_RADIUS} fill="#FFFFFF" />
-      <rect x="54" y="0" width="46" height="28" rx={SLOT_RADIUS} fill="#1F4E79" />
-      <rect x="108" y="0" width="46" height="28" rx={SLOT_RADIUS} fill="#0D8B6F" />
-      <rect x="162" y="0" width="34" height="28" rx={SLOT_RADIUS} fill="#8FD7C0" />
+      <rect className="termerMark__slot termerMark__slot--white" x="0" y="0" width="46" height="28" rx={SLOT_RADIUS} />
+      <rect className="termerMark__slot termerMark__slot--primary" x="54" y="0" width="46" height="28" rx={SLOT_RADIUS} />
+      <rect className="termerMark__slot termerMark__slot--secondary" x="108" y="0" width="46" height="28" rx={SLOT_RADIUS} />
+      <rect className="termerMark__slot termerMark__slot--highlight" x="162" y="0" width="34" height="28" rx={SLOT_RADIUS} />
 
-      <rect x="54" y="40" width="32" height="32" rx={SLOT_RADIUS} fill="#FFFFFF" />
-      <rect x="96" y="40" width="74" height="32" rx={SLOT_RADIUS} fill="#0D8B6F" />
+      <rect className="termerMark__slot termerMark__slot--white" x="54" y="40" width="32" height="32" rx={SLOT_RADIUS} />
+      <rect className="termerMark__slot termerMark__slot--secondary" x="96" y="40" width="74" height="32" rx={SLOT_RADIUS} />
 
-      <rect x="54" y="88" width="32" height="32" rx={SLOT_RADIUS} fill="#FFFFFF" />
-      <rect x="96" y="88" width="74" height="32" rx={SLOT_RADIUS} fill="#8A1538" />
+      <rect className="termerMark__slot termerMark__slot--white" x="54" y="88" width="32" height="32" rx={SLOT_RADIUS} />
+      <rect className="termerMark__slot termerMark__slot--accent" x="96" y="88" width="74" height="32" rx={SLOT_RADIUS} />
 
-      <rect x="54" y="136" width="32" height="32" rx={SLOT_RADIUS} fill="#FFFFFF" />
-      <rect x="96" y="136" width="74" height="32" rx={SLOT_RADIUS} fill="#1F4E79" />
+      <rect className="termerMark__slot termerMark__slot--white" x="54" y="136" width="32" height="32" rx={SLOT_RADIUS} />
+      <rect className="termerMark__slot termerMark__slot--primary" x="96" y="136" width="74" height="32" rx={SLOT_RADIUS} />
 
-      <rect x="54" y="184" width="32" height="32" rx={SLOT_RADIUS} fill="#FFFFFF" />
-      <rect x="96" y="184" width="74" height="32" rx={SLOT_RADIUS} fill="#4A6FA5" />
+      <rect className="termerMark__slot termerMark__slot--white" x="54" y="184" width="32" height="32" rx={SLOT_RADIUS} />
+      <rect className="termerMark__slot termerMark__slot--support" x="96" y="184" width="74" height="32" rx={SLOT_RADIUS} />
     </svg>
   );
 }

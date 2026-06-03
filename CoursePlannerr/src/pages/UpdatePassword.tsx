@@ -178,8 +178,10 @@ const css = `
   .uf-logo-name {
     font-size: 24px;
     font-weight: 700;
+    font-family: 'Space Grotesk', 'Plus Jakarta Sans', sans-serif;
     color: #111827;
-    letter-spacing: -0.03em;
+    line-height: 0.92;
+    letter-spacing: -0.075em;
   }
   .uf-logo-sub {
     font-size: 11px;

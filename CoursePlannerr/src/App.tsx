@@ -776,6 +776,12 @@ export default function App() {
     document.body.style.setProperty("--brand-highlight-rgb", hexToRgbTriplet(tokens.highlight));
     document.body.style.setProperty("--brand-surface-rgb", hexToRgbTriplet(tokens.surface));
     document.body.style.setProperty("--brand-subtle-rgb", hexToRgbTriplet(tokens.subtle));
+    document.body.style.setProperty("--termer-slot-white", "#FFFFFF");
+    document.body.style.setProperty("--termer-slot-primary", tokens.action);
+    document.body.style.setProperty("--termer-slot-secondary", tokens.support);
+    document.body.style.setProperty("--termer-slot-highlight", mixHex(tokens.highlight, "#8FD7C0", 0.35));
+    document.body.style.setProperty("--termer-slot-support", mixHex(tokens.support, "#4A6FA5", 0.42));
+    document.body.style.setProperty("--termer-slot-accent", mixHex(tokens.action, "#8A1538", 0.5));
     document.body.style.setProperty("--accent", tokens.action);
     previousThemeUniversityRef.current = universityId;
 

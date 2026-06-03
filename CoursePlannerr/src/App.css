@@ -57,6 +57,12 @@
   --select-option-text: #e9eef7;
   --select-disabled-text: #7f8a9c;
   --select-scheme: dark;
+  --termer-slot-white: #FFFFFF;
+  --termer-slot-primary: #1F4E79;
+  --termer-slot-secondary: #0D8B6F;
+  --termer-slot-highlight: #8FD7C0;
+  --termer-slot-support: #4A6FA5;
+  --termer-slot-accent: #8A1538;
 }
 
 body {
@@ -186,6 +192,17 @@ body.light .resultSkeleton {
   gap: 14px;
 }
 
+.termerMark__slot {
+  transition: fill 560ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.termerMark__slot--white { fill: var(--termer-slot-white); }
+.termerMark__slot--primary { fill: var(--termer-slot-primary); }
+.termerMark__slot--secondary { fill: var(--termer-slot-secondary); }
+.termerMark__slot--highlight { fill: var(--termer-slot-highlight); }
+.termerMark__slot--support { fill: var(--termer-slot-support); }
+.termerMark__slot--accent { fill: var(--termer-slot-accent); }
+
 .termerBrand__copy {
   display: flex;
   flex-direction: column;
@@ -196,9 +213,11 @@ body.light .resultSkeleton {
   color: #FFFFFF;
   font-family: "Space Grotesk", "Manrope", system-ui, sans-serif;
   font-weight: 700;
-  line-height: 0.96;
-  letter-spacing: -0.06em;
+  line-height: 0.92;
+  letter-spacing: -0.075em;
   text-shadow: 0 10px 26px rgba(0,0,0,0.24);
+  font-variation-settings: "wght" 700;
+  white-space: nowrap;
 }
 
 .termerBrand__subtitle {
@@ -251,10 +270,14 @@ body.light .resultSkeleton {
     drop-shadow(0 0 14px rgba(143, 215, 192, 0.06));
 }
 .topNav__brandText {
-  font-weight: 800;
-  letter-spacing: 0.01em;
+  font-family: "Space Grotesk", "Manrope", system-ui, sans-serif;
+  font-weight: 700;
+  line-height: 0.92;
+  letter-spacing: -0.065em;
   white-space: nowrap;
-  font-size: 1.08rem;
+  font-size: 1.5rem;
+  color: #FFFFFF;
+  text-shadow: 0 8px 18px rgba(0,0,0,0.22);
 }
 .topNav__brandButton {
   border: none;

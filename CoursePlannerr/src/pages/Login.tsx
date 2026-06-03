@@ -96,6 +96,12 @@ function buildLoginTheme(university: UniversityOption | null) {
     "--login-primary-soft": `${primary}38`,
     "--login-secondary-soft": `${secondary}30`,
     "--login-tertiary-soft": `${tertiary}28`,
+    "--termer-slot-white": "#FFFFFF",
+    "--termer-slot-primary": primary,
+    "--termer-slot-secondary": secondary,
+    "--termer-slot-highlight": tertiary,
+    "--termer-slot-support": tertiary,
+    "--termer-slot-accent": primary,
   } as React.CSSProperties;
 }
 
@@ -965,9 +971,11 @@ const css = `
   .uf-logo-name {
     color: #fff;
     font-family: 'Space Grotesk', sans-serif;
-    font-size: 25px;
+    font-size: 26px;
     font-weight: 700;
-    letter-spacing: -.03em;
+    line-height: .92;
+    letter-spacing: -.075em;
+    text-shadow: 0 8px 18px rgba(0,0,0,.22);
   }
 
   .uf-logo-sub {
