@@ -9,7 +9,7 @@ import {
   type UniversityId,
   type UniversityOption,
 } from "../config/universities.ts";
-import { fetchTerms, fetchUniversities } from "../utils/catalogApi.ts";
+import { fetchCatalogBootstrap, fetchTerms, fetchUniversities } from "../utils/catalogApi.ts";
 import { useCatalogStatus } from "../hooks/useCatalogStatus.ts";
 import { useSessionAccess } from "../hooks/useSessionAccess.ts";
 import {
@@ -118,6 +118,78 @@ function slugify(value: string) {
 
 function buildProfessorId(universityId: string, fullName: string) {
   return `${universityId}__${slugify(fullName) || "tba"}`;
+}
+
+function isRealInstructorName(value: string) {
+  const normalized = value.trim().toLowerCase();
+  return Boolean(normalized) && !["tba", "staff", "instructor tba", "arranged"].includes(normalized);
+}
+
+function tokenizeSearch(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function buildReviewIndexes(universityId: string, rawCourses: any[]) {
+  const courseMap = new Map<string, CourseSearchResult>();
+  const professorMap = new Map<string, ProfessorSearchResult>();
+  const professorCoursesMap = new Map<string, Map<string, CourseSearchResult>>();
+
+  for (const rawCourse of Array.isArray(rawCourses) ? rawCourses : []) {
+    const department = String(rawCourse?.department ?? rawCourse?.subject ?? "").trim().toUpperCase();
+    const courseNumber = String(rawCourse?.course_number ?? rawCourse?.courseNumber ?? "").trim().toUpperCase();
+    const title = String(rawCourse?.title ?? rawCourse?.courseTitle ?? "Untitled course").trim();
+
+    if (!department || !courseNumber) continue;
+
+    const reviewDepartment = buildReviewDepartment(universityId, department);
+    const courseEntry: CourseSearchResult = {
+      department,
+      course_number: courseNumber,
+      title,
+      review_department: reviewDepartment,
+      university_id: universityId,
+    };
+
+    const courseKey = `${department}::${courseNumber}`;
+    if (!courseMap.has(courseKey)) {
+      courseMap.set(courseKey, courseEntry);
+    }
+
+    const instructorName = String(rawCourse?.instructor ?? rawCourse?.professor_name ?? rawCourse?.professor ?? "").trim();
+    if (!isRealInstructorName(instructorName)) continue;
+
+    const professorId = buildProfessorId(universityId, instructorName);
+    if (!professorMap.has(professorId)) {
+      professorMap.set(professorId, {
+        id: professorId,
+        full_name: instructorName,
+      });
+    }
+
+    if (!professorCoursesMap.has(professorId)) {
+      professorCoursesMap.set(professorId, new Map());
+    }
+    professorCoursesMap.get(professorId)?.set(courseKey, courseEntry);
+  }
+
+  return {
+    courses: Array.from(courseMap.values()).sort((a, b) =>
+      `${displayDepartment(a.department)} ${a.course_number}`.localeCompare(
+        `${displayDepartment(b.department)} ${b.course_number}`,
+      )),
+    professors: Array.from(professorMap.values()).sort((a, b) =>
+      formatProfName(a.full_name).localeCompare(formatProfName(b.full_name))),
+    professorCourses: Array.from(professorCoursesMap.entries()).reduce<Record<string, CourseSearchResult[]>>(
+      (acc, [professorId, courseEntries]) => {
+        acc[professorId] = Array.from(courseEntries.values()).sort((a, b) =>
+          `${displayDepartment(a.department)} ${a.course_number}`.localeCompare(
+            `${displayDepartment(b.department)} ${b.course_number}`,
+          ));
+        return acc;
+      },
+      {},
+    ),
+  };
 }
 
 function parseManualCourseInput(value: string) {
@@ -1446,6 +1518,36 @@ export default function Reviews() {
     setStoredTermId(universityId, semesterId);
   }, [semesterId, universityId]);
 
+  useEffect(() => {
+    if (!semesterId) {
+      setReviewCatalogCourses([]);
+      setReviewCatalogProfessors([]);
+      setReviewCatalogProfessorCourses({});
+      return;
+    }
+
+    let cancelled = false;
+
+    fetchCatalogBootstrap(universityId, semesterId)
+      .then((payload) => {
+        if (cancelled) return;
+        const indexes = buildReviewIndexes(universityId, Array.isArray(payload?.courses) ? payload.courses : []);
+        setReviewCatalogCourses(indexes.courses);
+        setReviewCatalogProfessors(indexes.professors);
+        setReviewCatalogProfessorCourses(indexes.professorCourses);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setReviewCatalogCourses([]);
+        setReviewCatalogProfessors([]);
+        setReviewCatalogProfessorCourses({});
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [catalogStatusSequence, semesterId, universityId]);
+
   const [courseSearch, setCourseSearch] = useState("");
   const [courseResults, setCourseResults] = useState<CourseSearchResult[]>([]);
   const [selectedCourse, setSelectedCourse] = useState<CourseSearchResult | null>(null);
@@ -1466,6 +1568,9 @@ export default function Reviews() {
     count: number;
   } | null>(null);
   const [profCourses, setProfCourses] = useState<CourseSearchResult[]>([]);
+  const [reviewCatalogCourses, setReviewCatalogCourses] = useState<CourseSearchResult[]>([]);
+  const [reviewCatalogProfessors, setReviewCatalogProfessors] = useState<ProfessorSearchResult[]>([]);
+  const [reviewCatalogProfessorCourses, setReviewCatalogProfessorCourses] = useState<Record<string, CourseSearchResult[]>>({});
 
   const [showForm, setShowForm] = useState(false);
   const [formRating, setFormRating] = useState(0);
@@ -1553,20 +1658,14 @@ export default function Reviews() {
     setCourseSearch(course);
     setTab("courses");
     setShowForm(true);
-    fetch(
-      `${API}/api/courses/search?university=${encodeURIComponent(universityId)}&search=${encodeURIComponent(course)}`,
-    )
-      .then((r) => r.json())
-      .then((data) => {
-        const match = (Array.isArray(data) ? data : []).find((c: CourseSearchResult) =>
-          displayDepartment(c.department).toUpperCase() === dept
-          && (!num || c.course_number.toUpperCase() === num),
-        );
-        if (match) {
-          handleSelectCourse(match);
-        }
-      });
-  }, [searchParams, universityId]);
+    const match = reviewCatalogCourses.find((c) =>
+      displayDepartment(c.department).toUpperCase() === dept
+      && (!num || c.course_number.toUpperCase() === num),
+    );
+    if (match) {
+      handleSelectCourse(match);
+    }
+  }, [reviewCatalogCourses, searchParams, universityId]);
 
   useEffect(() => {
     if (suppressCourseSearch.current) {
@@ -1577,23 +1676,23 @@ export default function Reviews() {
       setCourseResults([]);
       return;
     }
-    const controller = new AbortController();
-    fetch(
-      `${API}/api/courses/search?university=${encodeURIComponent(universityId)}&search=${encodeURIComponent(courseSearch)}`,
-      { signal: controller.signal },
-    )
-      .then((r) => r.json())
-      .then((data) => {
-        setCourseResults((Array.isArray(data) ? data : []).slice(0, 8));
-      })
-      .catch((error) => {
-        if (error.name !== "AbortError") {
-          setCourseResults([]);
-        }
-      });
-
-    return () => controller.abort();
-  }, [catalogStatusSequence, courseSearch, universityId]);
+    const normalizedSearch = tokenizeSearch(courseSearch);
+    const compactSearch = normalizedSearch.replace(/\s+/g, "");
+    const nextResults = reviewCatalogCourses.filter((course) => {
+      const code = `${displayDepartment(course.department)} ${course.course_number}`.toLowerCase();
+      const haystack = [
+        code,
+        `${displayDepartment(course.department)}${course.course_number}`,
+        course.title,
+        course.review_department ?? "",
+      ]
+        .join(" ")
+        .toLowerCase();
+      const compactHaystack = haystack.replace(/\s+/g, "");
+      return haystack.includes(normalizedSearch) || compactHaystack.includes(compactSearch);
+    }).slice(0, 8);
+    setCourseResults(nextResults);
+  }, [courseSearch, reviewCatalogCourses]);
 
   useEffect(() => {
     if (suppressProfSearch.current) {
@@ -1604,21 +1703,16 @@ export default function Reviews() {
       setProfResults([]);
       return;
     }
-    const controller = new AbortController();
-    fetch(
-      `${API}/api/professors?university=${encodeURIComponent(universityId)}&search=${encodeURIComponent(profApiQuery)}`,
-      { signal: controller.signal },
-    )
-      .then((r) => r.json())
-      .then((data) => setProfResults(data.slice(0, 8)))
-      .catch((error) => {
-        if (error.name !== "AbortError") {
-          setProfResults([]);
-        }
-      });
-
-    return () => controller.abort();
-  }, [catalogStatusSequence, profApiQuery, universityId]);
+    const normalizedSearch = tokenizeSearch(profApiQuery);
+    const compactSearch = normalizedSearch.replace(/\s+/g, "");
+    const nextResults = reviewCatalogProfessors.filter((professor) => {
+      const displayName = formatProfName(professor.full_name).toLowerCase();
+      const rawName = professor.full_name.toLowerCase();
+      const haystack = `${displayName} ${rawName}`;
+      return haystack.includes(normalizedSearch) || haystack.replace(/\s+/g, "").includes(compactSearch);
+    }).slice(0, 8);
+    setProfResults(nextResults);
+  }, [profApiQuery, reviewCatalogProfessors]);
 
   const loadProfRatings = (profId: string) => {
     fetch(`${API}/api/ratings/professor/${profId}`)
@@ -1641,46 +1735,42 @@ export default function Reviews() {
     setFormDept("");
     setFormReviewDept("");
     setFormCourseNum("");
-    setProfCourses([]);
+    setProfCourses(reviewCatalogProfessorCourses[p.id] ?? []);
     loadProfRatings(p.id);
     fetch(
       `${API}/api/professors/${encodeURIComponent(p.id)}/courses?university=${encodeURIComponent(universityId)}`,
     )
       .then((r) => r.json())
-      .then((data) => setProfCourses(Array.isArray(data) ? data : []))
-      .catch(() => setProfCourses([]));
+      .then((data) => {
+        if (!Array.isArray(data) || data.length === 0) return;
+        setProfCourses(data);
+      })
+      .catch(() => undefined);
   };
 
   useEffect(() => {
     if (!catalogStatusSequence || !selectedCourse) return;
 
-    const query = `${displayDepartment(selectedCourse.department)} ${selectedCourse.course_number}`.trim();
-    fetch(
-      `${API}/api/courses/search?university=${encodeURIComponent(universityId)}&search=${encodeURIComponent(query)}`,
-    )
-      .then((response) => response.json())
-      .then((data) => {
-        const exactMatch = (Array.isArray(data) ? data : []).find((course: CourseSearchResult) =>
-          displayDepartment(course.department).toUpperCase() === displayDepartment(selectedCourse.department).toUpperCase()
-          && String(course.course_number).toUpperCase() === String(selectedCourse.course_number).toUpperCase(),
-        );
-        if (exactMatch) {
-          setSelectedCourse(exactMatch);
-        }
-      })
-      .catch(() => undefined);
-  }, [catalogStatusSequence, selectedCourse, universityId]);
+    const exactMatch = reviewCatalogCourses.find((course) =>
+      displayDepartment(course.department).toUpperCase() === displayDepartment(selectedCourse.department).toUpperCase()
+      && String(course.course_number).toUpperCase() === String(selectedCourse.course_number).toUpperCase(),
+    );
+    if (exactMatch) {
+      setSelectedCourse(exactMatch);
+    }
+  }, [catalogStatusSequence, reviewCatalogCourses, selectedCourse]);
 
   useEffect(() => {
     if (!catalogStatusSequence || !selectedProf) return;
 
+    setProfCourses(reviewCatalogProfessorCourses[selectedProf.id] ?? []);
     fetch(
       `${API}/api/professors/${encodeURIComponent(selectedProf.id)}/courses?university=${encodeURIComponent(universityId)}`,
     )
       .then((response) => response.json())
       .then((data) => setProfCourses(Array.isArray(data) ? data : []))
       .catch(() => undefined);
-  }, [catalogStatusSequence, selectedProf, universityId]);
+  }, [catalogStatusSequence, reviewCatalogProfessorCourses, selectedProf, universityId]);
 
   const handleSubmitCourse = async () => {
     if (!selectedCourse || formRating === 0 || !userId) return;

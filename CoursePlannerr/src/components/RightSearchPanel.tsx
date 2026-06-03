@@ -2314,20 +2314,14 @@ function RightSearchPanelComponent({
             </div>
           ) : null}
           <div className="searchHeroCard__inputWrap">
-          {!query ? (
+          {!query && !compactMobileHome ? (
             <div className="searchHeroCard__ghostHint" aria-hidden="true">
-              {compactMobileHome ? (
-                <span className="searchHeroCard__ghostHintMain">{mobileSearchHint}</span>
-              ) : (
-                <>
-                  <span className="searchHeroCard__ghostHintMain">Try {personalizedPrimaryCourseSuggestion}</span>
-                  {mostCommonCrnSuggestion ? (
-                    <span className="searchHeroCard__ghostHintMain searchHeroCard__ghostHintMain--secondary">
-                      OR CRN {mostCommonCrnSuggestion}
-                    </span>
-                  ) : null}
-                </>
-              )}
+              <span className="searchHeroCard__ghostHintMain">Try {personalizedPrimaryCourseSuggestion}</span>
+              {mostCommonCrnSuggestion ? (
+                <span className="searchHeroCard__ghostHintMain searchHeroCard__ghostHintMain--secondary">
+                  OR CRN {mostCommonCrnSuggestion}
+                </span>
+              ) : null}
             </div>
           ) : null}
             <input
