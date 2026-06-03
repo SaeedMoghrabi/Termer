@@ -31,6 +31,7 @@ type FieldProps = {
 const LOGIN_PHONE_BY_EMAIL_STORAGE_KEY = "termer:login-phone-by-email";
 const CONTACT_PROFILE_TIMEOUT_MS = 1800;
 const TERMER_LOGO_SRC = "/branding/termer-logo.png";
+const TERMER_MARK_SRC = "/branding/termer-mark.png";
 
 const UNIVERSITY_NAME_ALIASES: Record<string, string[]> = {
   aub: ["aub", "american university of beirut", "mail.aub.edu", "aub.edu.lb"],
@@ -452,7 +453,7 @@ export default function Login() {
                 <span><strong>AI</strong> assist</span>
               </div>
               <div className="uf-visual__brand" aria-hidden="true">
-                <img className="uf-visual__brandImage" src={TERMER_LOGO_SRC} alt="" />
+                <img className="uf-visual__brandImage" src={TERMER_MARK_SRC} alt="" />
               </div>
             </div>
           </section>
@@ -461,7 +462,11 @@ export default function Login() {
 
           <div className="uf-logo">
             <div className="uf-logo-shell">
-              <img className="uf-logo-image" src={TERMER_LOGO_SRC} alt="Termer" />
+              <img className="uf-logo-image" src={TERMER_MARK_SRC} alt="Termer" />
+            </div>
+            <div>
+              <span className="uf-logo-name">Termer</span>
+              <span className="uf-logo-sub">Course planner</span>
             </div>
           </div>
 
@@ -880,16 +885,17 @@ const css = `
     display: flex;
     justify-content: flex-end;
     margin-top: 16px;
-    opacity: .72;
+    opacity: .92;
   }
 
   .uf-visual__brandImage {
-    width: min(220px, 58%);
+    width: min(150px, 42%);
     height: auto;
-    padding: 8px 10px;
-    border-radius: 18px;
+    padding: 12px;
+    border-radius: 22px;
     background: rgba(2, 8, 18, .82);
     border: 1px solid rgba(255,255,255,.08);
+    box-shadow: 0 18px 38px rgba(0,0,0,.24);
   }
 
   .uf-card {
@@ -910,12 +916,17 @@ const css = `
     position: relative;
     display: flex;
     align-items: center;
+    gap: 14px;
     margin-bottom: 28px;
   }
 
   .uf-logo-shell {
-    width: fit-content;
-    padding: 10px 12px;
+    width: 84px;
+    height: 84px;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     border-radius: 24px;
     background: rgba(2, 8, 18, .88);
     border: 1px solid rgba(255,255,255,.08);
@@ -926,8 +937,28 @@ const css = `
 
   .uf-logo-image {
     display: block;
-    width: min(260px, 100%);
+    width: 100%;
     height: auto;
+  }
+
+  .uf-logo-name,
+  .uf-logo-sub { display: block; }
+
+  .uf-logo-name {
+    color: #fff;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 25px;
+    font-weight: 700;
+    letter-spacing: -.03em;
+  }
+
+  .uf-logo-sub {
+    margin-top: 4px;
+    color: rgba(237,247,255,.5);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .14em;
+    text-transform: uppercase;
   }
 
   .uf-card-copy {

@@ -23,7 +23,7 @@ function renderFatalStartup(error: unknown) {
       <div className="plannerCrashFallback" role="alert" aria-live="assertive">
         <img
           className="plannerCrashFallback__logo"
-          src="/branding/termer-logo.png"
+          src="/branding/termer-mark.png"
           alt="Termer"
         />
         <div className="plannerCrashFallback__eyebrow">Startup blocked</div>

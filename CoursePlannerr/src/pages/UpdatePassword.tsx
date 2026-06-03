@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient.ts";
 
-const TERMER_LOGO_SRC = "/branding/termer-logo.png";
+const TERMER_MARK_SRC = "/branding/termer-mark.png";
 
 export default function UpdatePassword() {
   const navigate = useNavigate();
@@ -70,7 +70,11 @@ export default function UpdatePassword() {
 
           <div className="uf-logo">
             <div className="uf-logo-shell">
-              <img className="uf-logo-image" src={TERMER_LOGO_SRC} alt="Termer" />
+              <img className="uf-logo-image" src={TERMER_MARK_SRC} alt="Termer" />
+            </div>
+            <div className="uf-logo-copy">
+              <span className="uf-logo-name">Termer</span>
+              <span className="uf-logo-sub">Account recovery</span>
             </div>
           </div>
 
@@ -146,16 +150,34 @@ const css = `
     max-width: 400px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
   }
-  .uf-logo { display: flex; align-items: center; margin-bottom: 28px; }
+  .uf-logo { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; }
   .uf-logo-shell {
-    width: fit-content;
-    padding: 10px 12px;
+    width: 74px;
+    height: 74px;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     border-radius: 22px;
     background: #05070d;
     border: 1px solid rgba(15, 23, 42, 0.12);
     box-shadow: 0 14px 32px rgba(15,23,42,0.12);
   }
-  .uf-logo-image { display: block; width: min(250px, 100%); height: auto; }
+  .uf-logo-image { display: block; width: 100%; height: auto; }
+  .uf-logo-copy { display: flex; flex-direction: column; gap: 4px; }
+  .uf-logo-name {
+    font-size: 24px;
+    font-weight: 700;
+    color: #111827;
+    letter-spacing: -0.03em;
+  }
+  .uf-logo-sub {
+    font-size: 11px;
+    font-weight: 800;
+    color: #6b7280;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
   .uf-heading { font-size: 18px; font-weight: 600; color: #111827; margin-bottom: 6px; }
   .uf-hint { font-size: 13px; color: #6b7280; margin-bottom: 24px; line-height: 1.6; }
   .uf-form { display: flex; flex-direction: column; gap: 16px; }

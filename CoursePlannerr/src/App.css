@@ -200,13 +200,14 @@ body.light .resultSkeleton {
   font-weight: 800;
   flex-shrink: 0;
 }
-.topNav__logoImage {
-  display: block;
-  height: 38px;
-  width: auto;
-  max-width: min(190px, 30vw);
-  padding: 6px 10px;
-  border-radius: 16px;
+.topNav__logoFrame {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  padding: 8px;
+  border-radius: 18px;
   background: #04070d;
   border: 1px solid rgba(255,255,255,0.08);
   box-shadow:
@@ -217,7 +218,17 @@ body.light .resultSkeleton {
     border-color 0.2s ease,
     box-shadow 0.2s ease;
 }
-.topNav__brandText { font-weight: 700; letter-spacing: 0.2px; white-space: nowrap; }
+.topNav__logoImage {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.topNav__brandText {
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  font-size: 1.08rem;
+}
 .topNav__brandButton {
   border: none;
   background: transparent;
@@ -228,7 +239,7 @@ body.light .resultSkeleton {
   gap: 10px;
   cursor: pointer;
 }
-.topNav__brandButton:hover .topNav__logoImage {
+.topNav__brandButton:hover .topNav__logoFrame {
   transform: translateY(-1px);
   border-color: rgba(var(--brand-primary-rgb), 0.34);
   box-shadow:
@@ -236,7 +247,7 @@ body.light .resultSkeleton {
     0 0 0 1px rgba(var(--brand-primary-rgb), 0.18),
     0 0 28px rgba(var(--brand-primary-rgb), 0.18);
 }
-.topNav__brandButton:active .topNav__logoImage {
+.topNav__brandButton:active .topNav__logoFrame {
   transform: translateY(0);
 }
 .topNav__brandButton:hover .topNav__brandText {
@@ -7424,15 +7435,16 @@ body.light .rightPanel__scroll::-webkit-scrollbar-thumb {
 
 .plannerCrashFallback__logo {
   display: block;
-  width: min(260px, 100%);
+  width: min(180px, 42vw);
   margin-bottom: 18px;
-  padding: 12px 14px;
-  border-radius: 24px;
+  padding: 16px;
+  border-radius: 28px;
   background: #04070d;
   border: 1px solid rgba(255,255,255,0.08);
   box-shadow:
     0 18px 38px rgba(0,0,0,0.28),
-    0 0 0 1px rgba(var(--brand-primary-rgb), 0.1);
+    0 0 0 1px rgba(var(--brand-primary-rgb), 0.1),
+    0 0 32px rgba(var(--brand-primary-rgb), 0.12);
 }
 
 .plannerCrashFallback__eyebrow {
