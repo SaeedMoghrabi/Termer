@@ -613,6 +613,154 @@ function buildCatalogStats(courses: Course[], universityName: string, semesterLa
   };
 }
 
+function parseSemesterNumber(message: string) {
+  const normalized = normalizeSearch(message);
+  const numeric = normalized.match(/\b(?:semester|sem|term)\s+(\d{1,2})\b/)?.[1]
+    ?? normalized.match(/\b(\d{1,2})(?:st|nd|rd|th)\s+(?:semester|sem|term)\b/)?.[1];
+  if (numeric) return Number(numeric);
+
+  const ordinalMap: Record<string, number> = {
+    first: 1,
+    second: 2,
+    third: 3,
+    fourth: 4,
+    fifth: 5,
+    sixth: 6,
+    seventh: 7,
+    eighth: 8,
+  };
+  const ordinal = normalized.match(/\b(first|second|third|fourth|fifth|sixth|seventh|eighth)\s+(?:semester|sem|term)\b/)?.[1];
+  return ordinal ? ordinalMap[ordinal] ?? null : null;
+}
+
+function summarizeCourseCard(course: Course) {
+  const meetings = course.meetings
+    .slice(0, 2)
+    .map((meeting) => {
+      const days = Array.isArray(meeting.days) ? meeting.days.join("/") : String(meeting.days ?? "");
+      return `${days} ${meeting.start}-${meeting.end}`;
+    })
+    .filter(Boolean)
+    .join(", ");
+  const openSeats = getOpenSeats(course);
+  return `${course.code} - ${course.title} (${course.credits} cr) with ${course.instructor || "TBA"}${meetings ? `, ${meetings}` : ""}${openSeats > 0 ? `, ${openSeats} open seat${openSeats === 1 ? "" : "s"}` : ""}.`;
+}
+
+function buildLocalAiFallbackResponse({
+  message,
+  universityId,
+  universityName,
+  semesterLabel,
+  courses,
+  selectedCourse,
+}: {
+  message: string;
+  universityId: string;
+  universityName: string;
+  semesterLabel: string;
+  courses: Course[];
+  selectedCourse?: Course | null;
+}) {
+  const normalized = normalizeSearch(message);
+  const exactCodes = extractCourseCodes(message);
+  const schedulePrompt = /\b(build|make|create|draft|plan|give me|show me)\b/.test(normalized)
+    && /\b(schedule|semester|plan)\b/.test(normalized);
+  const semesterNumber = parseSemesterNumber(message);
+  const csIntent = /\b(computer science|comp sci|compsci|cs|cmps|csc|csci|informatics|informatique|software)\b/.test(normalized);
+  const targetSubjects = csIntent ? (CS_SUBJECTS_BY_UNIVERSITY[universityId] ?? []) : [];
+  const relevant = isAdvisorQuestion(message)
+    ? findAdvisorRelevantCourses(message, courses, universityId)
+    : findRelevantCourses(message, courses);
+
+  if (selectedCourse && /[?]|\bwhat|which|when|where|who|how\b/i.test(message)) {
+    return {
+      mode: "course-info",
+      schedule: [],
+      scheduleCourses: [],
+      summary: `The live AI backend is slow right now, so I answered from your current catalog snapshot.\n\n${summarizeCourseCard(selectedCourse)}`,
+    };
+  }
+
+  if (schedulePrompt) {
+    const semesterBand = semesterNumber
+      ? semesterNumber <= 2
+        ? [100, 199]
+        : semesterNumber <= 4
+          ? [200, 299]
+          : semesterNumber <= 6
+            ? [300, 399]
+            : [400, 599]
+      : null;
+
+    const rankedPool = relevant.length ? relevant : courses;
+    const scored = rankedPool
+      .map((course) => {
+        const subject = course.department.toUpperCase();
+        const number = Number.parseInt(String(course.courseNumber || "").replace(/\D+/g, ""), 10);
+        let score = 0;
+        if (targetSubjects.includes(subject)) score += 120;
+        if (semesterBand && Number.isFinite(number) && number >= semesterBand[0] && number <= semesterBand[1]) score += 80;
+        if (getOpenSeats(course) > 0) score += 18;
+        if (course.meetings.length > 0) score += 10;
+        if (!/\bintro|remedial\b/i.test(course.title)) score += 6;
+        return { course, score };
+      })
+      .filter((entry) => entry.score > 0)
+      .sort((left, right) =>
+        right.score - left.score
+        || getOpenSeats(right.course) - getOpenSeats(left.course)
+        || left.course.code.localeCompare(right.course.code, undefined, { numeric: true }),
+      );
+
+    const picked: Course[] = [];
+    const usedCodes = new Set<string>();
+    for (const entry of scored) {
+      if (picked.length >= 4) break;
+      const codeKey = compact(entry.course.code);
+      if (usedCodes.has(codeKey)) continue;
+      usedCodes.add(codeKey);
+      picked.push(entry.course);
+    }
+
+    if (picked.length) {
+      return {
+        mode: "schedule",
+        schedule: picked.map((course) => course.id),
+        scheduleCourses: picked,
+        summary: [
+          `The live AI backend took too long, so I built this directly from the ${universityName}${semesterLabel ? ` ${semesterLabel}` : ""} catalog snapshot on your device.`,
+          semesterNumber
+            ? `This is a best-effort semester ${semesterNumber} draft${csIntent ? " for Computer Science" : ""}, using currently visible sections.`
+            : `This is a best-effort schedule draft from the currently visible sections${csIntent ? " for Computer Science" : ""}.`,
+          ...picked.map((course) => `- ${summarizeCourseCard(course)}`),
+        ].join("\n"),
+      };
+    }
+  }
+
+  if (exactCodes.length || relevant.length) {
+    const visible = (relevant.length ? relevant : courses).slice(0, 3);
+    if (visible.length) {
+      return {
+        mode: "course-info",
+        schedule: [],
+        scheduleCourses: [],
+        summary: [
+          `The live AI backend is slow right now, so I answered from the current ${universityName} catalog snapshot.`,
+          ...visible.map((course) => `- ${summarizeCourseCard(course)}`),
+        ].join("\n"),
+      };
+    }
+  }
+
+  return {
+    mode: "course-info",
+    schedule: [],
+    scheduleCourses: [],
+    summary: `The live AI backend is slow right now, but your planner is still loaded. Try asking with a course code, a major plus semester number, or a tighter schedule constraint so I can answer directly from the current ${universityName} course snapshot.`,
+  };
+}
+
 function formatSnapshotFreshness(updatedAt?: string | null) {
   if (!updatedAt) {
     return "I am using the latest locally cached published catalog snapshot available on this device.";
@@ -661,7 +809,7 @@ async function loadAiCoursePool(
   }
 }
 
-async function postAiSchedule(payload: unknown, timeoutMs = 18_000) {
+async function postAiSchedule(payload: unknown, timeoutMs = 7_500) {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
 
@@ -849,20 +997,22 @@ export function AIScheduler({
     setMessages((prev) => [...prev, userMsg]);
     setLoading(true);
 
+    let aiCourses: Course[] = [];
+
     try {
-      const aiCourses = await loadAiCoursePool(allCourses, universityId, termId);
+      aiCourses = await loadAiCoursePool(allCourses, universityId, termId);
       const courseCodes = extractCourseCodes(text);
       const courseCodeKeys = courseCodes.map(compact);
       const advisorQuestion = isAdvisorQuestion(text);
       const relevantCourses = advisorQuestion
         ? findAdvisorRelevantCourses(text, aiCourses, universityId)
         : findRelevantCourses(text, aiCourses);
-      const scopedRelevantCourses = relevantCourses.slice(0, advisorQuestion ? 80 : 30);
+      const scopedRelevantCourses = relevantCourses.slice(0, advisorQuestion ? 36 : 18);
       const sections =
         courseCodes.length > 0
           ? aiCourses.filter((c) =>
               courseCodeKeys.some((code) => compact(c.code) === code || compact(c.code).startsWith(code)),
-            ).slice(0, 80)
+            ).slice(0, 36)
           : scopedRelevantCourses;
 
       const catalogSnapshot = {
@@ -885,27 +1035,7 @@ export function AIScheduler({
         universityId,
       };
 
-      const fallbackAiPayload = {
-        message: text,
-        sections: [],
-        relevantCourses: [],
-        scheduledCourses: scheduledCourses.slice(0, 10).map(courseToAiPayload),
-        favoriteCourses: favoriteCourses.slice(0, 10).map(courseToAiPayload),
-        selectedCourse: selectedCourse ? courseToAiPayload(selectedCourse) : null,
-        selectedCrns: selectedCrns.slice(0, 6),
-        catalogStats: catalogSnapshot,
-        activeSlot,
-        semesterLabel,
-        termId,
-        universityId,
-      };
-
-      let data;
-      try {
-        data = await postAiSchedule(aiPayload, 18_000);
-      } catch (primaryError) {
-        data = await postAiSchedule(fallbackAiPayload, 10_000);
-      }
+      const data = await postAiSchedule(aiPayload, 7_500);
 
       const contextStillCurrent = contextKeyRef.current === requestContextKey;
       const requestStillCurrent = requestIdRef.current === requestId;
@@ -975,11 +1105,59 @@ export function AIScheduler({
         return;
       }
       const message = err instanceof Error ? err.message : "Something went wrong while contacting the AI.";
+      const localFallback = buildLocalAiFallbackResponse({
+        message: text,
+        universityId,
+        universityName,
+        semesterLabel,
+        courses: aiCourses.length ? aiCourses : allCourses,
+        selectedCourse,
+      });
+      const timedOut = /took too long/i.test(message);
+      const unreachable = /Failed to fetch|NetworkError|network/i.test(message);
+      if (localFallback) {
+        const hasSchedulePayload = Array.isArray(localFallback.schedule) && localFallback.schedule.length > 0;
+        const hasResolvedScheduleCourses = Array.isArray(localFallback.scheduleCourses) && localFallback.scheduleCourses.length > 0;
+        const expectsScheduleProposal = localFallback.mode === "schedule" || hasSchedulePayload || hasResolvedScheduleCourses;
+
+        if (expectsScheduleProposal) {
+          const fallbackPicked = Array.isArray(localFallback.scheduleCourses)
+            ? localFallback.scheduleCourses
+                .map((candidate) => coerceAiScheduleCourse(candidate))
+                .filter(Boolean) as Course[]
+            : [];
+          const nextScheduleIds = Array.isArray(localFallback.schedule)
+            ? localFallback.schedule.map((entry: unknown) => String(entry ?? "").trim()).filter(Boolean)
+            : [];
+          setProposedSchedule(fallbackPicked.length ? fallbackPicked : null);
+          setProposedScheduleIds(nextScheduleIds);
+          setProposedScheduleFallbackCourses(fallbackPicked);
+        } else {
+          setProposedSchedule(null);
+          setProposedScheduleIds([]);
+          setProposedScheduleFallbackCourses([]);
+        }
+
+        setAiStatus({
+          remoteEnabled: false,
+          provider: "local-catalog-fallback",
+          model: "client-side planner fallback",
+          message: timedOut
+            ? "Termer answered from the current catalog snapshot because the live AI backend was too slow."
+            : "Termer answered from the current catalog snapshot while the live AI backend was unavailable.",
+        });
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: localFallback.summary,
+          },
+        ]);
+        return;
+      }
       if (shouldRestoreDraftOnFailure) {
         setInput((current) => current || text);
       }
-      const timedOut = /took too long/i.test(message);
-      const unreachable = /Failed to fetch|NetworkError|network/i.test(message);
       setAiStatus({
         remoteEnabled: false,
         provider: "offline",
