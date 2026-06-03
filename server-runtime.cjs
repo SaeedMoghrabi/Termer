@@ -53,10 +53,13 @@ const app = express();
 const PORT = Number(process.env.PORT || 3001);
 const CLIENT_DIST_DIR = path.join(__dirname, "CoursePlannerr", "dist");
 const CLIENT_ASSETS_DIR = path.join(CLIENT_DIST_DIR, "assets");
+const AI_CACHE_TTL_MS = Math.max(30_000, Number(process.env.AI_CACHE_TTL_MS || 3 * 60 * 1000) || 3 * 60 * 1000);
+const MAX_AI_CACHE_ENTRIES = Math.max(20, Number(process.env.MAX_AI_CACHE_ENTRIES || 160) || 160);
 const MANUAL_IMPORT_EXTENSIONS = new Set([".json", ".csv", ".xlsx", ".xls"]);
 const VISUAL_IMPORT_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".pdf"]);
 const MANUAL_IMPORT_WATCH_DEBOUNCE_MS = 2500;
 const MANUAL_IMPORT_UNIVERSITIES = ["lu", "liu", "aust", "usj", "aub", "lau", "bau", "usek", "ndu"];
+const aiResponseCache = new Map();
 
 const supabase = process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY
   ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY)
@@ -504,6 +507,56 @@ function mergeAdvisorCourses(...courseLists) {
   });
 
   return [...byId.values(), ...byFallbackKey.values()];
+}
+
+function buildAiCacheKey({
+  message,
+  universityId,
+  termId,
+  semesterLabel,
+  selectedCourse,
+  sections,
+  relevantCourses,
+  scheduledCourses,
+  favoriteCourses,
+}) {
+  const compactCourse = (course) =>
+    normalizeText(course?.code || course?.id || course?.crn || "")
+      .toUpperCase()
+      .replace(/\s+/g, "");
+
+  return JSON.stringify({
+    universityId: normalizeText(universityId).toLowerCase(),
+    termId: normalizeText(termId),
+    semesterLabel: advisorNormalizeText(semesterLabel),
+    message: advisorNormalizeText(message),
+    selectedCourse: compactCourse(selectedCourse),
+    sections: array(sections).slice(0, 10).map(compactCourse).filter(Boolean),
+    relevantCourses: array(relevantCourses).slice(0, 10).map(compactCourse).filter(Boolean),
+    scheduledCourses: array(scheduledCourses).slice(0, 8).map(compactCourse).filter(Boolean),
+    favoriteCourses: array(favoriteCourses).slice(0, 8).map(compactCourse).filter(Boolean),
+  });
+}
+
+function getCachedAiResponse(cacheKey) {
+  const cached = aiResponseCache.get(cacheKey);
+  if (!cached) return null;
+  if (cached.expiresAt <= Date.now()) {
+    aiResponseCache.delete(cacheKey);
+    return null;
+  }
+  return cached.payload;
+}
+
+function setCachedAiResponse(cacheKey, payload) {
+  aiResponseCache.set(cacheKey, {
+    payload,
+    expiresAt: Date.now() + AI_CACHE_TTL_MS,
+  });
+  if (aiResponseCache.size <= MAX_AI_CACHE_ENTRIES) return;
+  const overflow = aiResponseCache.size - MAX_AI_CACHE_ENTRIES;
+  const keysToDrop = Array.from(aiResponseCache.keys()).slice(0, overflow);
+  keysToDrop.forEach((key) => aiResponseCache.delete(key));
 }
 
 function advisorNormalizeText(value = "") {
@@ -1366,22 +1419,39 @@ app.post("/api/ai-schedule", async (req, res) => {
     const requestedSemesterLabel = String(req.body?.semesterLabel ?? req.body?.catalogStats?.semesterLabel ?? "").trim();
     const intent = getAdvisorIntent(message);
     const selectedCourse = req.body?.selectedCourse || null;
-    const relevantCourses = array(req.body?.relevantCourses).slice(0, 80);
-    const sections = array(req.body?.sections).slice(0, 80);
-    const favoriteCourses = array(req.body?.favoriteCourses).slice(0, 40);
-    const scheduledCourses = array(req.body?.scheduledCourses).slice(0, 40);
+    const relevantCourses = array(req.body?.relevantCourses).slice(0, 36);
+    const sections = array(req.body?.sections).slice(0, 48);
+    const favoriteCourses = array(req.body?.favoriteCourses).slice(0, 18);
+    const scheduledCourses = array(req.body?.scheduledCourses).slice(0, 18);
+    const aiCacheKey = buildAiCacheKey({
+      message,
+      universityId,
+      termId: requestedTermId,
+      semesterLabel: requestedSemesterLabel,
+      selectedCourse,
+      sections,
+      relevantCourses,
+      scheduledCourses,
+      favoriteCourses,
+    });
+    const cachedResponse = getCachedAiResponse(aiCacheKey);
+    if (cachedResponse) {
+      return res.json({
+        ...cachedResponse,
+        aiStatus: getAiStatusPayload(),
+      });
+    }
     const mergedCourses = mergeAdvisorCourses(
       sections,
       relevantCourses,
       scheduledCourses,
       favoriteCourses,
       selectedCourse ? [selectedCourse] : [],
-    ).slice(0, 160);
+    ).slice(0, 96);
     const needsCatalogLookup = mergedCourses.length === 0;
     const needsUniversityWideCourses = Boolean(
       selectedCourse
       || intent.courseInquiry
-      || intent.broadCourseQuestion
       || intent.abbreviationMeaning,
     );
     const needsUniversityTerms = Boolean(needsCatalogLookup || needsUniversityWideCourses);
@@ -1404,8 +1474,8 @@ app.post("/api/ai-schedule", async (req, res) => {
     const university = buildUniversityContext(universityId, incomingCatalogStats);
     const liveCatalogCourses = mergedCourses.length
       ? []
-      : getCoursesForTerm({ universityId, termId: effectiveTermId, search: "" }).slice(0, 160);
-    const advisorCourses = (mergedCourses.length ? mergedCourses : liveCatalogCourses).slice(0, 160);
+      : getCoursesForTerm({ universityId, termId: effectiveTermId, search: "" }).slice(0, 120);
+    const advisorCourses = (mergedCourses.length ? mergedCourses : liveCatalogCourses).slice(0, 120);
     const catalogStats = incomingCatalogStats && typeof incomingCatalogStats === "object"
       ? {
           ...incomingCatalogStats,
@@ -1431,29 +1501,38 @@ app.post("/api/ai-schedule", async (req, res) => {
           },
         );
     const universityWideCourses = needsUniversityWideCourses
-      ? getAllCoursesForUniversity(universityId).slice(0, 1200)
+      ? getAllCoursesForUniversity(universityId).slice(0, 520)
       : advisorCourses;
 
-    const advisorResponse = buildAdvisorLocalResponse({
-      message,
-      university,
-      semesterLabel,
-      catalogStats,
-      advisorCourses,
-      universityCourses: universityWideCourses,
-      universityTerms,
-      relevantCourses,
-      sections,
-      favoriteCourses,
-      scheduledCourses,
-      selectedCourse,
-    });
+    let advisorResponse = null;
+    let advisorBuildError = null;
+    try {
+      advisorResponse = buildAdvisorLocalResponse({
+        message,
+        university,
+        semesterLabel,
+        catalogStats,
+        advisorCourses,
+        universityCourses: universityWideCourses,
+        universityTerms,
+        relevantCourses,
+        sections,
+        favoriteCourses,
+        scheduledCourses,
+        selectedCourse,
+      });
+    } catch (error) {
+      advisorBuildError = error;
+      console.error("[ai] advisor build failed:", error?.message || error);
+    }
 
     if (advisorResponse) {
-      return res.json({
+      const payload = {
         ...advisorResponse,
         aiStatus: getAiStatusPayload(),
-      });
+      };
+      setCachedAiResponse(aiCacheKey, payload);
+      return res.json(payload);
     }
 
     const fallbackSummary = message
@@ -1464,23 +1543,17 @@ app.post("/api/ai-schedule", async (req, res) => {
         ].join("\n")
       : `The live planner is ready for ${university.name}${semesterLabel ? ` in ${semesterLabel}` : ""}. Ask me for a schedule, a prerequisite chain, attribute buckets, or open-seat options.`;
 
-    return res.json({
+    const payload = {
       mode: "course-info",
       schedule: [],
       scheduleCourses: [],
       summary: fallbackSummary,
       avgDifficulty: null,
       aiStatus: getAiStatusPayload(),
-      promptContext: buildAdvisorPromptContext({
-        message,
-        university,
-        semesterLabel,
-        catalogStats,
-        advisorCourses: mergedCourses,
-        universityTerms,
-        selectedCourse: req.body?.selectedCourse || null,
-      }),
-    });
+      warning: advisorBuildError ? String(advisorBuildError?.message || advisorBuildError) : undefined,
+    };
+    setCachedAiResponse(aiCacheKey, payload);
+    return res.json(payload);
   } catch (error) {
     return res.status(500).json({
       error: error?.message || "The AI advisor could not complete that request.",

@@ -661,53 +661,42 @@ async function loadAiCoursePool(
   }
 }
 
-async function postAiSchedule(payload: unknown) {
-  let lastError: Error | null = null;
+async function postAiSchedule(payload: unknown, timeoutMs = 18_000) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
 
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 45000);
+  try {
+    const response = await fetch(`${API}/api/ai-schedule`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    const raw = await response.text();
+    let data: any = null;
 
     try {
-      const response = await fetch(`${API}/api/ai-schedule`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
-      const raw = await response.text();
-      let data: any = null;
-
-      try {
-        data = raw ? JSON.parse(raw) : null;
-      } catch {
-        throw new Error(`The AI server returned an unreadable response (${response.status}).`);
-      }
-
-      if (!response.ok) {
-        throw new Error(data?.error || data?.message || `The AI server returned HTTP ${response.status}.`);
-      }
-
-      return data;
-    } catch (error: any) {
-      if (error?.name === "AbortError") {
-        lastError = new Error("The AI request took too long, so I stopped waiting. Please try again.");
-      } else {
-        lastError = error instanceof Error ? error : new Error("Something went wrong while contacting the AI.");
-      }
-
-      const retryable = attempt < 2 && /unreadable response|HTTP 5\d{2}|server error|temporarily unavailable|took too long/i.test(lastError.message);
-      if (!retryable) {
-        throw lastError;
-      }
-
-      await new Promise((resolve) => window.setTimeout(resolve, 350));
-    } finally {
-      window.clearTimeout(timeout);
+      data = raw ? JSON.parse(raw) : null;
+    } catch {
+      throw new Error(`The AI server returned an unreadable response (${response.status}).`);
     }
-  }
 
-  throw lastError ?? new Error("Something went wrong while contacting the AI.");
+    if (!response.ok) {
+      throw new Error(data?.error || data?.message || `The AI server returned HTTP ${response.status}.`);
+    }
+
+    return data;
+  } catch (error: any) {
+    if (error?.name === "AbortError") {
+      throw new Error("The AI request took too long, so I stopped waiting. Please try again.");
+    }
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error("Something went wrong while contacting the AI.");
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 function buildWelcomeMessage(
@@ -876,25 +865,47 @@ export function AIScheduler({
             ).slice(0, 80)
           : scopedRelevantCourses;
 
+      const catalogSnapshot = {
+        ...buildCatalogStats(aiCourses, universityName, semesterLabel),
+        updatedAt: catalogUpdatedAt ?? null,
+      };
+
       const aiPayload = {
         message: text,
-        sections: sections.map(courseToAiPayload),
-        relevantCourses: scopedRelevantCourses.map(courseToAiPayload),
-        scheduledCourses: scheduledCourses.map(courseToAiPayload),
-        favoriteCourses: favoriteCourses.slice(0, 40).map(courseToAiPayload),
+        sections: sections.slice(0, 36).map(courseToAiPayload),
+        relevantCourses: scopedRelevantCourses.slice(0, 24).map(courseToAiPayload),
+        scheduledCourses: scheduledCourses.slice(0, 16).map(courseToAiPayload),
+        favoriteCourses: favoriteCourses.slice(0, 16).map(courseToAiPayload),
         selectedCourse: selectedCourse ? courseToAiPayload(selectedCourse) : null,
         selectedCrns,
-        catalogStats: {
-          ...buildCatalogStats(aiCourses, universityName, semesterLabel),
-          updatedAt: catalogUpdatedAt ?? null,
-        },
+        catalogStats: catalogSnapshot,
         activeSlot,
         semesterLabel,
         termId,
         universityId,
       };
 
-      let data = await postAiSchedule(aiPayload);
+      const fallbackAiPayload = {
+        message: text,
+        sections: [],
+        relevantCourses: [],
+        scheduledCourses: scheduledCourses.slice(0, 10).map(courseToAiPayload),
+        favoriteCourses: favoriteCourses.slice(0, 10).map(courseToAiPayload),
+        selectedCourse: selectedCourse ? courseToAiPayload(selectedCourse) : null,
+        selectedCrns: selectedCrns.slice(0, 6),
+        catalogStats: catalogSnapshot,
+        activeSlot,
+        semesterLabel,
+        termId,
+        universityId,
+      };
+
+      let data;
+      try {
+        data = await postAiSchedule(aiPayload, 18_000);
+      } catch (primaryError) {
+        data = await postAiSchedule(fallbackAiPayload, 10_000);
+      }
 
       const contextStillCurrent = contextKeyRef.current === requestContextKey;
       const requestStillCurrent = requestIdRef.current === requestId;
@@ -967,18 +978,27 @@ export function AIScheduler({
       if (shouldRestoreDraftOnFailure) {
         setInput((current) => current || text);
       }
+      const timedOut = /took too long/i.test(message);
+      const unreachable = /Failed to fetch|NetworkError|network/i.test(message);
       setAiStatus({
         remoteEnabled: false,
         provider: "offline",
         model: "server unavailable",
-        message: "The local AI service is temporarily unavailable. Please try again while I inspect the backend.",
+        message: timedOut
+          ? "The AI service is responding too slowly right now."
+          : unreachable
+            ? "The AI service is not reachable right now."
+            : "The local AI service is temporarily unavailable while I inspect the backend.",
       });
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content:
-            `${message}\n\nThe local AI service hit a server error. Please try again. If it keeps happening, I need to inspect the backend rather than asking you to restart everything.`,
+          content: timedOut
+            ? `${message}\n\nI already retried with a smaller advisor request, but the backend still did not answer in time.`
+            : unreachable
+              ? `${message}\n\nThe AI backend is not reachable right now, so I could not complete the request.`
+              : `${message}\n\nThe local AI service hit a backend issue. If it keeps happening, I need to inspect that route directly.`,
         },
       ]);
     } finally {

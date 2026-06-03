@@ -2,6 +2,9 @@ import { useState, useEffect, useMemo, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 import SchoolRoundedIcon from "@mui/icons-material/SchoolRounded";
 import CalculateRoundedIcon from "@mui/icons-material/CalculateRounded";
+import NotificationsRoundedIcon from "@mui/icons-material/NotificationsRounded";
+import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
+import SyncRoundedIcon from "@mui/icons-material/SyncRounded";
 import { supabase } from "../supabaseClient.ts";
 import { API_ROOT as API_URL } from "../config/runtime.ts";
 import { clearLocalAdminSession } from "../utils/localAdminSession.ts";
@@ -429,6 +432,7 @@ export function TopNav({
   const updatesBadgeCount = unreadAnnouncementIds.length + (requiredProfileIncomplete ? 1 : 0);
   const visibleUniversityId = lockedUniversityId ?? universityId;
   const visibleUniversities = universities;
+  const catalogStatusText = normalizeText(lastUpdatedText) || "Refreshing every few minutes";
 
   const saveRequiredProfileNames = async () => {
     if (!currentUserId) return;
@@ -795,10 +799,16 @@ export function TopNav({
           )}
         </nav>
 
-        <div className="topNav__status" title={lastUpdatedText}>
-          <span className="topNav__statusText">
-            {semesterLabel} — {lastUpdatedText}
-          </span>
+        <div className="topNav__status" title={`${semesterLabel} — ${catalogStatusText}`}>
+          <div className="topNav__statusIcon" aria-hidden="true">
+            <SyncRoundedIcon sx={{ fontSize: 16 }} />
+          </div>
+          <div className="topNav__statusCopy">
+            <span className="topNav__statusLabel">Catalog sync</span>
+            <span className="topNav__statusText">
+              {catalogStatusText}
+            </span>
+          </div>
         </div>
 
         <div className="topNav__controls">
@@ -883,7 +893,7 @@ export function TopNav({
             <div className="gpa-mhead">
               <div className="gpa-mhead-left">
                 <div className="gpa-mhead-icon" aria-hidden="true">
-                  🔔
+                  <NotificationsRoundedIcon sx={{ fontSize: 18 }} />
                 </div>
                 <div>
                   <div className="gpa-mhead-title">Updates</div>
@@ -895,8 +905,9 @@ export function TopNav({
               <button
                 className="gpa-mhead-close"
                 onClick={() => setShowAnnouncements(false)}
+                aria-label="Close updates"
               >
-                ✕
+                <CloseRoundedIcon sx={{ fontSize: 18 }} />
               </button>
             </div>
 
@@ -915,6 +926,12 @@ export function TopNav({
                   <p className="updatesPanel__heroText">
                     Required account steps and live notices are grouped here in the same visual language as the rest of your current university workspace.
                   </p>
+                  <div className="updatesPanel__heroStatusRow">
+                    <span className="updatesPanel__heroPill updatesPanel__heroPill--status">
+                      Catalog sync
+                    </span>
+                    <span className="updatesPanel__heroStatusText">{catalogStatusText}</span>
+                  </div>
                 </div>
               </section>
 

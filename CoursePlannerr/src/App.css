@@ -330,13 +330,48 @@ body.light .resultSkeleton {
 .topNav__link svg {
   font-size: 16px;
 }
-.topNav__status { flex: 1; overflow: hidden; min-width: 0; }
+.topNav__status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 1 290px;
+  min-width: 220px;
+  overflow: hidden;
+}
+.topNav__statusIcon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(var(--brand-primary-rgb), 0.96);
+  background:
+    linear-gradient(135deg, rgba(var(--brand-primary-rgb), 0.16), rgba(var(--brand-secondary-rgb), 0.1)),
+    rgba(255,255,255,0.04);
+  border: 1px solid rgba(var(--brand-primary-rgb), 0.2);
+  box-shadow: inset 0 0 0 1px rgba(var(--brand-primary-rgb), 0.06);
+}
+.topNav__statusCopy {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+.topNav__statusLabel {
+  color: rgba(255,255,255,0.58);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
 .topNav__statusText {
-  color: var(--muted);
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   font-size: 13px;
+  font-weight: 700;
 }
 .topNav__controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .topNav__controlLabel { color: var(--muted); font-size: 12px; white-space: nowrap; }
@@ -382,21 +417,27 @@ body.light .resultSkeleton {
 }
 .topNav__updatesBadge {
   position: absolute;
-  top: -8px;
-  right: -8px;
-  min-width: 22px;
-  height: 22px;
+  top: -9px;
+  right: -9px;
+  min-width: 24px;
+  height: 24px;
   border-radius: 999px;
   padding: 0 7px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
   color: var(--brand-on-primary, #07111d);
   background: linear-gradient(135deg, rgba(255,255,255,0.96), rgba(var(--brand-primary-rgb), 0.9));
   border: 1px solid rgba(var(--brand-primary-rgb), 0.32);
-  box-shadow: 0 10px 24px rgba(var(--brand-primary-rgb), 0.26);
+  box-shadow:
+    0 12px 26px rgba(var(--brand-primary-rgb), 0.28),
+    inset 0 0 0 1px rgba(255,255,255,0.18);
 }
 
 .updatesPanel {
@@ -413,31 +454,16 @@ body.light .resultSkeleton {
 
 .updatesPanel .gpa-mhead-icon {
   position: relative;
-  color: transparent;
+  color: var(--brand-on-primary, #07111d);
   border-color: rgba(var(--brand-primary-rgb), 0.24);
   background:
     linear-gradient(135deg, rgba(255,255,255,0.96), rgba(var(--brand-primary-rgb), 0.9));
   box-shadow: 0 14px 28px rgba(var(--brand-primary-rgb), 0.18);
 }
 
-.updatesPanel .gpa-mhead-icon::before {
-  content: "UP";
-  color: var(--brand-on-primary, #07111d);
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.14em;
-}
-
 .updatesPanel .gpa-mhead-close {
-  color: transparent;
+  color: rgba(255,255,255,0.78);
   position: relative;
-}
-
-.updatesPanel .gpa-mhead-close::before {
-  content: "x";
-  color: var(--text);
-  font-size: 15px;
-  font-weight: 800;
 }
 
 .updatesPanel__body {
@@ -532,6 +558,20 @@ body.light .resultSkeleton {
   white-space: pre-wrap;
 }
 
+.updatesPanel__heroStatusRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.updatesPanel__heroStatusText {
+  color: rgba(255,255,255,0.82);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
 .updatesPanel__heroPill {
   display: inline-flex;
   align-items: center;
@@ -549,6 +589,11 @@ body.light .resultSkeleton {
 
 .updatesPanel__heroPill--required {
   background: rgba(var(--brand-primary-rgb), 0.18);
+}
+
+.updatesPanel__heroPill--status {
+  background: rgba(var(--brand-secondary-rgb), 0.18);
+  border-color: rgba(var(--brand-secondary-rgb), 0.28);
 }
 
 .updatesPanel__stack {
@@ -1911,21 +1956,35 @@ a {
 
 .topNav__status {
   display: flex;
-  justify-content: center;
   align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  flex: 0 1 320px;
+  min-width: 240px;
+  padding: 0 2px;
+}
+
+.topNav__statusIcon {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border-radius: 13px;
+}
+
+.topNav__statusCopy {
+  min-width: 0;
 }
 
 .topNav__statusText {
-  display: inline-flex;
-  align-items: center;
-  min-height: 42px;
-  padding: 0 16px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
+  display: block;
+  min-height: auto;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .topNav__controls {
