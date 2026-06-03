@@ -541,6 +541,7 @@ function CourseAnalytics({
     <div style={{ marginBottom: 28 }}>
       {/* Big scores */}
       <div
+        className="reviewsAnalyticsHero"
         style={{
           background: "var(--panel)",
           border: "1px solid var(--border)",
@@ -550,6 +551,7 @@ function CourseAnalytics({
         }}
       >
         <div
+          className="reviewsAnalyticsHeroStats"
           style={{
             display: "flex",
             alignItems: "center",
@@ -585,7 +587,7 @@ function CourseAnalytics({
               Overall Rating
             </div>
           </div>
-          <div style={{ width: 1, height: 60, background: "var(--border)" }} />
+          <div className="reviewsAnalyticsDivider" style={{ width: 1, height: 60, background: "var(--border)" }} />
           <div style={{ textAlign: "center" }}>
             <div
               style={{
@@ -612,7 +614,7 @@ function CourseAnalytics({
               Difficulty · {getDifficultyLabel(diffVal)}
             </div>
           </div>
-          <div style={{ width: 1, height: 60, background: "var(--border)" }} />
+          <div className="reviewsAnalyticsDivider" style={{ width: 1, height: 60, background: "var(--border)" }} />
           <div style={{ textAlign: "center" }}>
             <div
               style={{
@@ -640,9 +642,10 @@ function CourseAnalytics({
           </div>
         </div>
         <div
+          className="reviewsAnalyticsPair"
           style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}
         >
-          <div>
+          <div className="reviewsPanel">
             <div
               style={{
                 fontSize: 11,
@@ -686,7 +689,7 @@ function CourseAnalytics({
               <span>5</span>
             </div>
           </div>
-          <div>
+          <div className="reviewsPanel">
             <div
               style={{
                 fontSize: 11,
@@ -735,6 +738,7 @@ function CourseAnalytics({
 
       {/* Distributions */}
       <div
+        className="reviewsAnalyticsGrid"
         style={{
           display: "grid",
           gridTemplateColumns: "1fr 1fr",
@@ -743,6 +747,7 @@ function CourseAnalytics({
         }}
       >
         <div
+          className="reviewsPanel"
           style={{
             background: "var(--panel)",
             border: "1px solid var(--border)",
@@ -771,6 +776,7 @@ function CourseAnalytics({
           ))}
         </div>
         <div
+          className="reviewsPanel"
           style={{
             background: "var(--panel)",
             border: "1px solid var(--border)",
@@ -808,6 +814,7 @@ function CourseAnalytics({
 
       {/* Stats + Sentiment + Trend */}
       <div
+        className="reviewsAnalyticsTertiary"
         style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -829,6 +836,7 @@ function CourseAnalytics({
         </div>
         <SentimentPanel sentiment={sentiment} />
         <div
+          className="reviewsPanel"
           style={{
             background: "var(--panel)",
             border: "1px solid var(--border)",
@@ -888,6 +896,7 @@ function ProfessorAnalytics({
     <div style={{ marginBottom: 28 }}>
       {/* Big scores */}
       <div
+        className="reviewsAnalyticsHero"
         style={{
           background: "var(--panel)",
           border: "1px solid var(--border)",
@@ -897,6 +906,7 @@ function ProfessorAnalytics({
         }}
       >
         <div
+          className="reviewsAnalyticsHeroStats"
           style={{
             display: "flex",
             alignItems: "center",
@@ -932,7 +942,7 @@ function ProfessorAnalytics({
               Overall Rating
             </div>
           </div>
-          <div style={{ width: 1, height: 60, background: "var(--border)" }} />
+          <div className="reviewsAnalyticsDivider" style={{ width: 1, height: 60, background: "var(--border)" }} />
           <div style={{ textAlign: "center" }}>
             <div
               style={{
@@ -958,7 +968,7 @@ function ProfessorAnalytics({
               Total Reviews
             </div>
           </div>
-          <div style={{ width: 1, height: 60, background: "var(--border)" }} />
+          <div className="reviewsAnalyticsDivider" style={{ width: 1, height: 60, background: "var(--border)" }} />
           <div style={{ textAlign: "center" }}>
             <div
               style={{
@@ -1033,6 +1043,7 @@ function ProfessorAnalytics({
 
       {/* Distribution + courses taught */}
       <div
+        className="reviewsAnalyticsGrid"
         style={{
           display: "grid",
           gridTemplateColumns: "1fr 1fr",
@@ -1041,6 +1052,7 @@ function ProfessorAnalytics({
         }}
       >
         <div
+          className="reviewsPanel"
           style={{
             background: "var(--panel)",
             border: "1px solid var(--border)",
@@ -1069,6 +1081,7 @@ function ProfessorAnalytics({
           ))}
         </div>
         <div
+          className="reviewsPanel"
           style={{
             background: "var(--panel)",
             border: "1px solid var(--border)",
@@ -1153,6 +1166,7 @@ function ProfessorAnalytics({
 
       {/* Stats + Sentiment + Trend */}
       <div
+        className="reviewsAnalyticsTertiary"
         style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -1176,6 +1190,7 @@ function ProfessorAnalytics({
         </div>
         <SentimentPanel sentiment={sentiment} />
         <div
+          className="reviewsPanel"
           style={{
             background: "var(--panel)",
             border: "1px solid var(--border)",
@@ -1210,6 +1225,7 @@ function SentimentPanel({
   if (!sentiment) {
     return (
       <div
+        className="reviewsPanel"
         style={{
           background: "var(--panel)",
           border: "1px solid var(--border)",
@@ -1229,6 +1245,7 @@ function SentimentPanel({
   }
   return (
     <div
+      className="reviewsPanel"
       style={{
         background: "var(--panel)",
         border: "1px solid var(--border)",
@@ -1782,7 +1799,7 @@ export default function Reviews() {
     showDiff = false,
     showCourse = false,
   ) => (
-    <div style={{ ...card, marginBottom: 24 }}>
+    <div className="reviewsCard reviewsCard--form" style={{ ...card, marginBottom: 24 }}>
       <div
         style={{
           fontWeight: 700,
@@ -1842,7 +1859,7 @@ export default function Reviews() {
                 No linked course list is loaded for this professor yet. Enter the
                 course code manually.
               </div>
-              <div style={{ display: "flex", gap: 8 }}>
+              <div className="reviewsCourseManualFields" style={{ display: "flex", gap: 8 }}>
                 <input
                   style={inputStyle}
                   placeholder="CMPS"
@@ -1923,7 +1940,7 @@ export default function Reviews() {
           {submitError}
         </div>
       )}
-      <div style={{ display: "flex", gap: 10 }}>
+      <div className="reviewsFormActions" style={{ display: "flex", gap: 10 }}>
         <button
           onClick={onSubmit}
           disabled={
@@ -2144,6 +2161,7 @@ export default function Reviews() {
               {tab === "courses"
                 ? courseResults.map((c) => (
                     <div
+                      className="reviewsSearchResultItem"
                       key={`${c.department}-${c.course_number}`}
                       onClick={() => handleSelectCourse(c)}
                       style={{
@@ -2156,6 +2174,7 @@ export default function Reviews() {
                       }}
                     >
                       <span
+                        className="reviewsSearchResultCode"
                         style={{
                           fontWeight: 700,
                           color: "var(--text)",
@@ -2171,6 +2190,7 @@ export default function Reviews() {
                   ))
                 : profResults.map((p) => (
                     <div
+                      className="reviewsSearchResultItem"
                       key={p.id}
                       onClick={() => handleSelectProf(p)}
                       style={{
@@ -2233,6 +2253,7 @@ export default function Reviews() {
         {tab === "courses" && selectedCourse && (
           <div>
             <div
+              className="reviewsSelectionHeader"
               style={{
                 display: "flex",
                 alignItems: "flex-start",
@@ -2258,7 +2279,7 @@ export default function Reviews() {
                   {selectedCourse.title}
                 </div>
               </div>
-              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <div className="reviewsSelectionActions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
                 {renderWriteButton()}
               </div>
             </div>
@@ -2267,6 +2288,7 @@ export default function Reviews() {
               <CourseAnalytics ratings={courseRatings} avg={courseAvg} />
             ) : (
               <div
+                className="reviewsCard reviewsCard--empty"
                 style={{
                   ...card,
                   textAlign: "center",
@@ -2303,8 +2325,9 @@ export default function Reviews() {
                   style={{ display: "flex", flexDirection: "column", gap: 12 }}
                 >
                   {courseRatings.map((r) => (
-                    <div key={r.id} style={card}>
+                    <div key={r.id} className="reviewsCard" style={card}>
                       <div
+                        className="reviewsMetaRow"
                         style={{
                           display: "flex",
                           alignItems: "center",
@@ -2332,6 +2355,7 @@ export default function Reviews() {
                           </span>
                         )}
                         <span
+                          className="reviewsMetaDate"
                           style={{
                             fontSize: 12,
                             color: "var(--muted)",
@@ -2365,6 +2389,7 @@ export default function Reviews() {
         {tab === "professors" && selectedProf && (
           <div>
             <div
+              className="reviewsSelectionHeader"
               style={{
                 display: "flex",
                 alignItems: "flex-start",
@@ -2397,7 +2422,7 @@ export default function Reviews() {
                   </div>
                 )}
               </div>
-              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <div className="reviewsSelectionActions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
                 {renderWriteButton()}
               </div>
             </div>
@@ -2408,6 +2433,7 @@ export default function Reviews() {
               <ProfessorAnalytics ratings={profRatings} avg={profAvg} />
             ) : (
               <div
+                className="reviewsCard reviewsCard--empty"
                 style={{
                   ...card,
                   textAlign: "center",
@@ -2445,8 +2471,9 @@ export default function Reviews() {
                   style={{ display: "flex", flexDirection: "column", gap: 12 }}
                 >
                   {profRatings.map((r) => (
-                    <div key={r.id} style={card}>
+                    <div key={r.id} className="reviewsCard" style={card}>
                       <div
+                        className="reviewsMetaRow"
                         style={{
                           display: "flex",
                           alignItems: "center",
@@ -2459,6 +2486,7 @@ export default function Reviews() {
                           {displayDepartment(r.department)} {r.course_number}
                         </span>
                         <span
+                          className="reviewsMetaDate"
                           style={{
                             fontSize: 12,
                             color: "var(--muted)",

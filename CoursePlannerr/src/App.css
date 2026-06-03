@@ -3128,6 +3128,19 @@ body.light .reviewsHeader {
   box-shadow: 0 18px 44px rgba(5, 11, 18, 0.18);
 }
 
+.reviewsCard,
+.reviewsPanel {
+  min-width: 0;
+}
+
+.reviewsMetaRow {
+  min-width: 0;
+}
+
+.reviewsMetaDate {
+  white-space: nowrap;
+}
+
 .schExportButton:disabled {
   opacity: 0.68;
   cursor: progress;
@@ -3170,6 +3183,95 @@ body.light .reviewsHeader {
 
   .reviewsSchoolSelect {
     width: 100%;
+  }
+}
+
+@media (max-width: 720px) {
+  .reviewsPage {
+    margin: 24px auto !important;
+    padding: 0 14px !important;
+  }
+
+  .reviewsSearchShell {
+    padding: 12px !important;
+    margin-bottom: 20px !important;
+  }
+
+  .reviewsSearchResultItem {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 6px !important;
+  }
+
+  .reviewsSearchResultCode {
+    min-width: 0 !important;
+  }
+
+  .reviewsSelectionHeader {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 14px !important;
+  }
+
+  .reviewsSelectionActions {
+    width: 100% !important;
+    align-items: stretch !important;
+  }
+
+  .reviewsSelectionActions > * {
+    width: 100% !important;
+  }
+
+  .reviewsCard {
+    padding: 18px !important;
+  }
+
+  .reviewsCard--empty {
+    padding: 28px 18px !important;
+  }
+
+  .reviewsAnalyticsHero {
+    padding: 20px 16px !important;
+  }
+
+  .reviewsAnalyticsHeroStats {
+    gap: 18px !important;
+    margin-bottom: 20px !important;
+  }
+
+  .reviewsAnalyticsDivider {
+    display: none !important;
+  }
+
+  .reviewsAnalyticsPair,
+  .reviewsAnalyticsGrid,
+  .reviewsAnalyticsTertiary {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  .reviewsPanel {
+    padding: 16px !important;
+  }
+
+  .reviewsMetaRow {
+    flex-wrap: wrap !important;
+    align-items: flex-start !important;
+    gap: 10px !important;
+  }
+
+  .reviewsMetaDate {
+    margin-left: 0 !important;
+    white-space: normal !important;
+  }
+
+  .reviewsCourseManualFields,
+  .reviewsFormActions {
+    flex-direction: column !important;
+  }
+
+  .reviewsFormActions > button {
+    width: 100% !important;
   }
 }
 

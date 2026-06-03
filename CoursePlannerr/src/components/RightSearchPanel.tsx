@@ -1865,9 +1865,14 @@ function RightSearchPanelComponent({
     })),
     [personalizedSearchExamples],
   );
+  const mobileSearchHint = "Try COURSENAME or CRN 00000";
   const searchPlaceholder = mostCommonCrnSuggestion
-    ? `Search ${personalizedPrimaryCourseSuggestion} or CRN ${mostCommonCrnSuggestion}`
-    : `Search ${personalizedPrimaryCourseSuggestion}`;
+    ? (compactMobileHome
+        ? mobileSearchHint
+        : `Search ${personalizedPrimaryCourseSuggestion} or CRN ${mostCommonCrnSuggestion}`)
+    : (compactMobileHome
+        ? mobileSearchHint
+        : `Search ${personalizedPrimaryCourseSuggestion}`);
   const showBootstrapSkeleton = !hasSearchIntent
     && searchableCourses.length === 0
     && (catalogLoading || catalogRecoveryLoading);
@@ -2309,16 +2314,22 @@ function RightSearchPanelComponent({
             </div>
           ) : null}
           <div className="searchHeroCard__inputWrap">
-            {!query ? (
-              <div className="searchHeroCard__ghostHint" aria-hidden="true">
-                <span className="searchHeroCard__ghostHintMain">Try {personalizedPrimaryCourseSuggestion}</span>
-                {mostCommonCrnSuggestion ? (
-                  <span className="searchHeroCard__ghostHintMain searchHeroCard__ghostHintMain--secondary">
-                    OR CRN {mostCommonCrnSuggestion}
-                  </span>
-                ) : null}
-              </div>
-            ) : null}
+          {!query ? (
+            <div className="searchHeroCard__ghostHint" aria-hidden="true">
+              {compactMobileHome ? (
+                <span className="searchHeroCard__ghostHintMain">{mobileSearchHint}</span>
+              ) : (
+                <>
+                  <span className="searchHeroCard__ghostHintMain">Try {personalizedPrimaryCourseSuggestion}</span>
+                  {mostCommonCrnSuggestion ? (
+                    <span className="searchHeroCard__ghostHintMain searchHeroCard__ghostHintMain--secondary">
+                      OR CRN {mostCommonCrnSuggestion}
+                    </span>
+                  ) : null}
+                </>
+              )}
+            </div>
+          ) : null}
             <input
               id="course-search-box"
               className={`searchHeroCard__input${query ? "" : " hasNoClear"}`}
