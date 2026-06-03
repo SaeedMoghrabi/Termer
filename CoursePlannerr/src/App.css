@@ -7601,6 +7601,11 @@ body.light .rightPanel__scroll::-webkit-scrollbar-thumb {
     border-radius: 18px !important;
   }
 
+  .mainContainer.mainContainer--compactMobileHome .searchHeroCard__input::placeholder {
+    color: rgba(255, 255, 255, 0.42) !important;
+    font-weight: 500 !important;
+  }
+
   .mainContainer.mainContainer--compactMobileHome .searchHeroCard__clear {
     position: static !important;
     justify-self: start !important;

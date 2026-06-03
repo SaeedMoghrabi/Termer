@@ -2331,7 +2331,7 @@ function RightSearchPanelComponent({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               inputMode={effectiveSearchMode === "crn" ? "numeric" : "search"}
-              placeholder={query ? searchPlaceholder : ""}
+              placeholder={compactMobileHome || query ? searchPlaceholder : ""}
             />
             {query ? (
               <button
