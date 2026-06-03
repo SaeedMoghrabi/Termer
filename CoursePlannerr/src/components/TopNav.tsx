@@ -57,6 +57,7 @@ type CurrentNameProfile = {
 };
 
 const REQUIRED_NAME_REFRESH_AT = Date.parse("2026-05-31T00:00:00.000Z");
+const TERMER_LOGO_SRC = "/branding/termer-logo.png";
 
 function buildInitialGpaRows(courses: Course[], defaultGrade: string) {
   return courses.length > 0
@@ -733,10 +734,12 @@ export function TopNav({
             title={`Refresh ${appName}`}
             aria-label={`Refresh ${appName}`}
           >
-            <span className="topNav__logo" aria-hidden="true">
-              {appName.slice(0, 1)}
-            </span>
-            <span className="topNav__brandText">{appName}</span>
+            <img
+              className="topNav__logoImage"
+              src={TERMER_LOGO_SRC}
+              alt=""
+              aria-hidden="true"
+            />
           </button>
         </div>
 

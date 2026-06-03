@@ -3,6 +3,8 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient.ts";
 
+const TERMER_LOGO_SRC = "/branding/termer-logo.png";
+
 export default function UpdatePassword() {
   const navigate = useNavigate();
   const [password, setPassword] = useState("");
@@ -67,12 +69,9 @@ export default function UpdatePassword() {
         <div className="uf-card">
 
           <div className="uf-logo">
-            <div className="uf-logo-mark">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M3 8h10M8 3l5 5-5 5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
+            <div className="uf-logo-shell">
+              <img className="uf-logo-image" src={TERMER_LOGO_SRC} alt="Termer" />
             </div>
-            <span className="uf-logo-name">Termer</span>
           </div>
 
           <h2 className="uf-heading">Set new password</h2>
@@ -147,12 +146,16 @@ const css = `
     max-width: 400px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
   }
-  .uf-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; }
-  .uf-logo-mark {
-    width: 32px; height: 32px; border-radius: 8px; background: #2563eb;
-    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  .uf-logo { display: flex; align-items: center; margin-bottom: 28px; }
+  .uf-logo-shell {
+    width: fit-content;
+    padding: 10px 12px;
+    border-radius: 22px;
+    background: #05070d;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    box-shadow: 0 14px 32px rgba(15,23,42,0.12);
   }
-  .uf-logo-name { font-size: 17px; font-weight: 600; color: #111827; }
+  .uf-logo-image { display: block; width: min(250px, 100%); height: auto; }
   .uf-heading { font-size: 18px; font-weight: 600; color: #111827; margin-bottom: 6px; }
   .uf-hint { font-size: 13px; color: #6b7280; margin-bottom: 24px; line-height: 1.6; }
   .uf-form { display: flex; flex-direction: column; gap: 16px; }

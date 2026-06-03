@@ -30,6 +30,7 @@ type FieldProps = {
 
 const LOGIN_PHONE_BY_EMAIL_STORAGE_KEY = "termer:login-phone-by-email";
 const CONTACT_PROFILE_TIMEOUT_MS = 1800;
+const TERMER_LOGO_SRC = "/branding/termer-logo.png";
 
 const UNIVERSITY_NAME_ALIASES: Record<string, string[]> = {
   aub: ["aub", "american university of beirut", "mail.aub.edu", "aub.edu.lb"],
@@ -424,6 +425,9 @@ export default function Login() {
         <div className="uf-shell">
           <section className="uf-showcase" aria-label="Planner preview">
             <div className="uf-showcase__badge">Live Lebanese university scheduler</div>
+            <div className="uf-showcase__wordmarkShell">
+              <img className="uf-showcase__wordmark" src={TERMER_LOGO_SRC} alt="Termer" />
+            </div>
             <h1>Build the semester before it builds you.</h1>
             <p>
               Sign in with your university email, land inside your own campus,
@@ -447,21 +451,17 @@ export default function Login() {
                 <span><strong>92</strong> health</span>
                 <span><strong>AI</strong> assist</span>
               </div>
+              <div className="uf-visual__brand" aria-hidden="true">
+                <img className="uf-visual__brandImage" src={TERMER_LOGO_SRC} alt="" />
+              </div>
             </div>
           </section>
           <section className="uf-card" aria-label="Account access">
             <div className="uf-card-glow" />
 
           <div className="uf-logo">
-            <div className="uf-logo-mark">
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                <path d="M4.3 9.1h9.4M9.1 4.3l4.6 4.8-4.6 4.6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M3.7 3.8h5.1M3.7 14.2h5.1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" opacity=".55"/>
-              </svg>
-            </div>
-            <div>
-              <span className="uf-logo-name">Termer</span>
-              <span className="uf-logo-sub">Temporary name</span>
+            <div className="uf-logo-shell">
+              <img className="uf-logo-image" src={TERMER_LOGO_SRC} alt="Termer" />
             </div>
           </div>
 
@@ -748,9 +748,27 @@ const css = `
     text-transform: uppercase;
   }
 
+  .uf-showcase__wordmarkShell {
+    width: fit-content;
+    margin-top: 18px;
+    padding: 10px 12px;
+    border-radius: 24px;
+    background: rgba(3, 8, 18, .88);
+    border: 1px solid rgba(255,255,255,.08);
+    box-shadow:
+      0 18px 42px rgba(0,0,0,.28),
+      0 0 0 1px rgba(var(--login-primary-rgb, 32, 214, 255), 0.08);
+  }
+
+  .uf-showcase__wordmark {
+    display: block;
+    width: min(320px, 100%);
+    height: auto;
+  }
+
   .uf-showcase h1 {
     max-width: 620px;
-    margin: 34px 0 16px;
+    margin: 26px 0 16px;
     font-family: 'Space Grotesk', sans-serif;
     font-size: clamp(42px, 6vw, 76px);
     line-height: .92;
@@ -858,6 +876,22 @@ const css = `
 
   .uf-metrics strong { display: block; color: #ffffff; font-size: 18px; }
 
+  .uf-visual__brand {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 16px;
+    opacity: .72;
+  }
+
+  .uf-visual__brandImage {
+    width: min(220px, 58%);
+    height: auto;
+    padding: 8px 10px;
+    border-radius: 18px;
+    background: rgba(2, 8, 18, .82);
+    border: 1px solid rgba(255,255,255,.08);
+  }
+
   .uf-card {
     min-height: 620px;
     padding: 34px;
@@ -876,38 +910,24 @@ const css = `
     position: relative;
     display: flex;
     align-items: center;
-    gap: 12px;
     margin-bottom: 28px;
   }
 
-  .uf-logo-mark {
-    width: 42px;
-    height: 42px;
-    display: grid;
-    place-items: center;
-    border-radius: 16px;
-    color: #08111e;
-    background: linear-gradient(135deg, var(--login-secondary), var(--login-primary));
-    box-shadow: 0 14px 34px var(--login-secondary-soft);
+  .uf-logo-shell {
+    width: fit-content;
+    padding: 10px 12px;
+    border-radius: 24px;
+    background: rgba(2, 8, 18, .88);
+    border: 1px solid rgba(255,255,255,.08);
+    box-shadow:
+      0 18px 42px rgba(0,0,0,.28),
+      0 0 0 1px rgba(var(--login-secondary-rgb, 81, 240, 185), 0.08);
   }
 
-  .uf-logo-name,
-  .uf-logo-sub { display: block; }
-
-  .uf-logo-name {
-    color: #fff;
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 20px;
-    font-weight: 700;
-  }
-
-  .uf-logo-sub {
-    margin-top: 2px;
-    color: rgba(237,247,255,.45);
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: .12em;
-    text-transform: uppercase;
+  .uf-logo-image {
+    display: block;
+    width: min(260px, 100%);
+    height: auto;
   }
 
   .uf-card-copy {

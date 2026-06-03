@@ -21,6 +21,11 @@ function renderFatalStartup(error: unknown) {
   ReactDOM.createRoot(rootElement).render(
     <React.StrictMode>
       <div className="plannerCrashFallback" role="alert" aria-live="assertive">
+        <img
+          className="plannerCrashFallback__logo"
+          src="/branding/termer-logo.png"
+          alt="Termer"
+        />
         <div className="plannerCrashFallback__eyebrow">Startup blocked</div>
         <strong>Termer could not finish booting the app.</strong>
         <span>
