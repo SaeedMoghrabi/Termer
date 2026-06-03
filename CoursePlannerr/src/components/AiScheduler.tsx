@@ -1694,18 +1694,28 @@ const css = `
 
   @media (max-width: 600px) {
     .ai-fab {
-      left: 8px;
-      right: 8px;
-      bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+      left: 50%;
+      right: auto;
+      transform: translateX(-50%);
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
       justify-content: center;
-      padding: 14px 16px;
-      border-radius: 18px;
+      padding: 12px 18px;
+      border-radius: 999px;
+      width: auto;
+      max-width: calc(100vw - 24px);
+      min-height: 52px;
+      font-size: 13px;
+      box-shadow: 0 18px 36px rgba(9, 26, 45, 0.32);
+    }
+
+    .ai-fab:hover {
+      transform: translateX(-50%) translateY(-1px);
     }
 
     .ai-panel {
       left: 8px;
       right: 8px;
-      bottom: calc(env(safe-area-inset-bottom, 0px) + 68px);
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 74px);
       width: auto;
       height: min(78vh, 680px);
       border-radius: 20px;
@@ -1758,7 +1768,14 @@ const css = `
   @media (max-height: 760px) {
     .ai-fab {
       bottom: 12px;
-      right: 12px;
+    }
+  }
+
+  @media (max-width: 600px) and (max-height: 760px) {
+    .ai-fab {
+      left: 50%;
+      right: auto;
+      transform: translateX(-50%);
     }
   }
 `;
