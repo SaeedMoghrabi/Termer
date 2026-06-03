@@ -7,7 +7,7 @@ import {
   type UniversityId,
   type UniversityOption,
 } from "../config/universities.ts";
-import { fetchTerms, fetchUniversities } from "../utils/catalogApi.ts";
+import { fetchCatalogBootstrap, fetchTerms, fetchUniversities } from "../utils/catalogApi.ts";
 import { getStoredTermId, getStoredUniversityId, setStoredTermId, setStoredUniversityId } from "../utils/plannerPreferences.ts";
 import { TopNav } from "../components/TopNav.tsx";
 import { useSessionAccess } from "../hooks/useSessionAccess.ts";
@@ -83,6 +83,36 @@ function resolvePreferredTermId(universityId: string, terms: PreviousesTerm[], c
   return terms.find((term) => term.isCurrent)?.id ?? terms[0]?.id ?? "";
 }
 
+function tokenizePreviousCourseSearch(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function buildPreviousCourseIndex(universityId: string, rawCourses: any[]) {
+  const courseMap = new Map<string, CourseSearchResult>();
+
+  for (const rawCourse of Array.isArray(rawCourses) ? rawCourses : []) {
+    const department = normalizeText(rawCourse?.department ?? rawCourse?.subject).toUpperCase();
+    const courseNumber = normalizeText(rawCourse?.course_number ?? rawCourse?.courseNumber).toUpperCase();
+    const title = normalizeText(rawCourse?.title ?? rawCourse?.courseTitle);
+
+    if (!department || !courseNumber) continue;
+
+    const courseKey = `${department}::${courseNumber}`;
+    if (courseMap.has(courseKey)) continue;
+
+    courseMap.set(courseKey, {
+      department,
+      course_number: courseNumber,
+      title: title || "Untitled course",
+      university_id: universityId,
+    });
+  }
+
+  return Array.from(courseMap.values()).sort((a, b) =>
+    `${a.department} ${a.course_number}`.localeCompare(`${b.department} ${b.course_number}`),
+  );
+}
+
 function StatTile({ label, value, hint }: { label: string; value: string | number; hint: string }) {
   return (
     <div style={{ ...cardStyle, padding: 16 }}>
@@ -118,6 +148,7 @@ export default function Previouses() {
   const [semesterId, setSemesterId] = useState("");
   const [courseSearch, setCourseSearch] = useState("");
   const [courseResults, setCourseResults] = useState<CourseSearchResult[]>([]);
+  const [searchableCourses, setSearchableCourses] = useState<CourseSearchResult[]>([]);
   const [selectedCourse, setSelectedCourse] = useState<CourseSearchResult | null>(null);
   const [documents, setDocuments] = useState<PreviousDocument[]>([]);
   const [stats, setStats] = useState<PreviousStats>({
@@ -200,38 +231,53 @@ export default function Previouses() {
   }, [semesterId, universityId]);
 
   useEffect(() => {
+    if (!semesterId) {
+      setSearchableCourses([]);
+      setLoadingSearch(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingSearch(true);
+
+    fetchCatalogBootstrap(universityId, semesterId)
+      .then((payload) => {
+        if (cancelled) return;
+        setSearchableCourses(buildPreviousCourseIndex(universityId, payload?.courses ?? []));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSearchableCourses([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingSearch(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [semesterId, universityId]);
+
+  useEffect(() => {
     const query = courseSearch.trim();
     if (query.length < 2) {
       setCourseResults([]);
       return;
     }
 
-    const controller = new AbortController();
-    setLoadingSearch(true);
-    fetch(`${API}/api/courses/search?university=${encodeURIComponent(universityId)}&search=${encodeURIComponent(query)}`, {
-      cache: "no-store",
-      signal: controller.signal,
-    })
-      .then((response) => response.json())
-      .then((data) => {
-        if (!Array.isArray(data)) {
-          setCourseResults([]);
-          return;
-        }
-        setCourseResults(
-          data.map((course) => ({
-            department: normalizeText(course.department),
-            course_number: normalizeText(course.course_number),
-            title: normalizeText(course.title),
-            university_id: normalizeText(course.university_id || universityId),
-          })),
-        );
-      })
-      .catch(() => setCourseResults([]))
-      .finally(() => setLoadingSearch(false));
+    const normalizedSearch = tokenizePreviousCourseSearch(query);
+    const compactSearch = normalizedSearch.replace(/\s+/g, "");
+    const nextResults = searchableCourses.filter((course) => {
+      const code = `${course.department} ${course.course_number}`.toLowerCase();
+      const haystack = [code, `${course.department}${course.course_number}`, course.title]
+        .join(" ")
+        .toLowerCase();
+      const compactHaystack = haystack.replace(/\s+/g, "");
+      return haystack.includes(normalizedSearch) || compactHaystack.includes(compactSearch);
+    }).slice(0, 10);
 
-    return () => controller.abort();
-  }, [courseSearch, universityId]);
+    setCourseResults(nextResults);
+  }, [courseSearch, searchableCourses]);
 
   const loadPreviouses = useCallback((course: CourseSearchResult | null) => {
     if (!course) {
