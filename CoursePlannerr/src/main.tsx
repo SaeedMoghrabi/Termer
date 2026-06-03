@@ -8,6 +8,21 @@ import { API_DIAGNOSTICS, APP_BASE_PATH } from './config/runtime.ts'
 import { clearTermerClientState, reconcileClientBuild } from './utils/plannerPreferences.ts'
 
 declare const __TERMER_BUILD_ID__: string;
+const SPA_REDIRECT_PARAM = "__termer_route";
+
+function restoreSpaRouteFromRedirect() {
+  if (typeof window === "undefined") return;
+
+  const url = new URL(window.location.href);
+  const redirectedPath = url.searchParams.get(SPA_REDIRECT_PARAM);
+  if (!redirectedPath) return;
+
+  url.searchParams.delete(SPA_REDIRECT_PARAM);
+  const cleanSearch = url.searchParams.toString();
+  const fallbackPath = `${url.pathname}${cleanSearch ? `?${cleanSearch}` : ""}${url.hash}`;
+  const targetPath = redirectedPath.startsWith("/") ? redirectedPath : fallbackPath;
+  window.history.replaceState(null, "", targetPath);
+}
 
 function renderFatalStartup(error: unknown) {
   const rootElement = document.getElementById('root');
@@ -73,6 +88,7 @@ if (API_DIAGNOSTICS.configurationWarning) {
 
 try {
   reconcileClientBuild(__TERMER_BUILD_ID__);
+  restoreSpaRouteFromRedirect();
 
   ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
     <React.StrictMode>
