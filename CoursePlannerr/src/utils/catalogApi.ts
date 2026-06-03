@@ -39,6 +39,8 @@ type SeedCatalog = {
   courses?: any[];
 };
 
+const seedCatalogCache = new Map<string, Promise<SeedCatalog | null>>();
+
 async function fetchJson<T>(
   path: string,
   params?: Record<string, string>,
@@ -81,12 +83,28 @@ async function fetchSeedCatalog(universityId: string): Promise<SeedCatalog | nul
     return null;
   }
 
-  const response = await fetch(`/seed-catalogs/${universityId}.json`, { cache: "no-store" });
-  if (!response.ok) {
-    throw new Error(`Seed catalog failed: ${response.status}`);
+  const existing = seedCatalogCache.get(universityId);
+  if (existing) {
+    return existing;
   }
 
-  return response.json() as Promise<SeedCatalog>;
+  const request = (async () => {
+    const response = await fetch(`/seed-catalogs/${universityId}.json`, { cache: "force-cache" });
+    if (!response.ok) {
+      throw new Error(`Seed catalog failed: ${response.status}`);
+    }
+
+    return response.json() as Promise<SeedCatalog>;
+  })();
+
+  seedCatalogCache.set(universityId, request);
+
+  try {
+    return await request;
+  } catch (error) {
+    seedCatalogCache.delete(universityId);
+    throw error;
+  }
 }
 
 function buildSeedTermCode(universityId: string, termCode: string) {

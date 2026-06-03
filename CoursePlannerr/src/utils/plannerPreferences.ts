@@ -14,6 +14,8 @@ const SCHEDULE_SNAPSHOT_KEY_PREFIX = "termer:schedule-snapshot:";
 const CLIENT_BUILD_KEY = "termer:client-build-id";
 const GUEST_SNAPSHOT_ID = "guest";
 const TERMER_STORAGE_PREFIX = "termer:";
+const memoryTermsCache = new Map<string, PlannerTermOption[]>();
+const memoryCoursesCache = new Map<string, Course[]>();
 
 export type PlannerTermOption = {
   id: string;
@@ -42,7 +44,11 @@ function readJsonStorage<T>(key: string, fallback: T): T {
 
 function writeJsonStorage<T>(key: string, value: T): void {
   if (!hasWindow()) return;
-  window.localStorage.setItem(key, JSON.stringify(value));
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Browser storage can hit quota limits, especially with large catalog snapshots.
+  }
 }
 
 function cloneScheduleMap(value: unknown): Record<number, Course[]> {
@@ -106,28 +112,53 @@ export function setStoredTermId(universityId: string, termId: string): void {
 }
 
 export function getCachedTerms(universityId: string): PlannerTermOption[] {
+  const memoryTerms = memoryTermsCache.get(universityId);
+  if (memoryTerms && memoryTerms.length > 0) {
+    return memoryTerms;
+  }
+
   const terms = readJsonStorage<PlannerTermOption[]>(
     `${TERMS_CACHE_KEY_PREFIX}${universityId}`,
     [],
   );
-  return Array.isArray(terms)
+  const normalizedTerms = Array.isArray(terms)
     ? terms.filter((term) => term && typeof term.id === "string" && typeof term.label === "string")
     : [];
+
+  if (normalizedTerms.length > 0) {
+    memoryTermsCache.set(universityId, normalizedTerms);
+  }
+
+  return normalizedTerms;
 }
 
 export function setCachedTerms(universityId: string, terms: PlannerTermOption[]): void {
-  writeJsonStorage(`${TERMS_CACHE_KEY_PREFIX}${universityId}`, terms);
+  const normalizedTerms = Array.isArray(terms)
+    ? terms.filter((term) => term && typeof term.id === "string" && typeof term.label === "string")
+    : [];
+  memoryTermsCache.set(universityId, normalizedTerms);
+  writeJsonStorage(`${TERMS_CACHE_KEY_PREFIX}${universityId}`, normalizedTerms);
 }
 
 export function getCachedCourses(universityId: string, termId: string): Course[] {
   if (!termId) return [];
+  const memoryCourses = memoryCoursesCache.get(`${universityId}:${termId}`);
+  if (memoryCourses && memoryCourses.length > 0) {
+    return memoryCourses;
+  }
   const courses = readJsonStorage<Course[]>(`${COURSES_CACHE_KEY_PREFIX}${universityId}:${termId}`, []);
-  return sanitizeCourses(courses);
+  const normalizedCourses = sanitizeCourses(courses);
+  if (normalizedCourses.length > 0) {
+    memoryCoursesCache.set(`${universityId}:${termId}`, normalizedCourses);
+  }
+  return normalizedCourses;
 }
 
 export function setCachedCourses(universityId: string, termId: string, courses: Course[]): void {
   if (!termId) return;
-  writeJsonStorage(`${COURSES_CACHE_KEY_PREFIX}${universityId}:${termId}`, sanitizeCourses(courses));
+  const normalizedCourses = sanitizeCourses(courses);
+  memoryCoursesCache.set(`${universityId}:${termId}`, normalizedCourses);
+  writeJsonStorage(`${COURSES_CACHE_KEY_PREFIX}${universityId}:${termId}`, normalizedCourses);
 }
 
 export function getCachedScheduleSnapshot(
@@ -201,6 +232,8 @@ export function reconcileClientBuild(buildId: string): void {
 
 export function clearTermerClientState(): void {
   if (!hasWindow()) return;
+  memoryTermsCache.clear();
+  memoryCoursesCache.clear();
 
   const keysToDelete: string[] = [];
   for (let index = 0; index < window.localStorage.length; index += 1) {
