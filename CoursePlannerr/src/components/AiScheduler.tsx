@@ -624,29 +624,6 @@ function formatSnapshotFreshness(updatedAt?: string | null) {
   return `Snapshot freshness: synced ${parsed.toLocaleString()}.`;
 }
 
-async function fetchDifficulty(course: Course): Promise<number | null> {
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 3500);
-
-  try {
-    const dept = encodeURIComponent(
-      course.reviewDepartment
-        ?? `${course.universityId.toUpperCase()}__${course.department}`,
-    );
-    const num = encodeURIComponent(course.courseNumber);
-    const res = await fetch(`${API}/api/ratings/course/${dept}/${num}`, {
-      signal: controller.signal,
-    });
-    const data = await res.json();
-    if (data.averages?.difficulty > 0)
-      return parseFloat(data.averages.difficulty);
-  } catch {}
-  finally {
-    window.clearTimeout(timeout);
-  }
-  return null;
-}
-
 async function postAiSchedule(payload: unknown) {
   let lastError: Error | null = null;
 
@@ -730,16 +707,6 @@ ${helpfulActions.map((action) => `- ${action}`).join("\n")}
 
 Good prompts for this university:
 ${profile.prompts.map((prompt) => `- "${prompt}"`).join("\n")}`;
-}
-
-function looksGenericAiSummary(summary: string) {
-  const normalized = normalizeSearch(summary);
-  return normalized.startsWith("i received your request")
-    || normalized.startsWith("i am ready for")
-    || normalized.includes("ask me for a semester schedule")
-    || normalized.includes("your last message was")
-    || normalized.includes("i can inspect")
-    || normalized.includes("i can currently inspect");
 }
 
 export function AIScheduler({
@@ -863,30 +830,18 @@ export function AIScheduler({
       const relevantCourses = advisorQuestion
         ? findAdvisorRelevantCourses(text, allCourses, universityId)
         : findRelevantCourses(text, allCourses);
+      const scopedRelevantCourses = relevantCourses.slice(0, advisorQuestion ? 80 : 30);
       const sections =
         courseCodes.length > 0
           ? allCourses.filter((c) =>
               courseCodeKeys.some((code) => compact(c.code) === code || compact(c.code).startsWith(code)),
-            )
-          : relevantCourses.slice(0, advisorQuestion ? 180 : 60);
-
-      const difficulties: Record<string, number> = {};
-      if (sections.length > 0) {
-        const uniqueCodes = [...new Set(sections.map((c) => c.code))].slice(0, 24);
-        await Promise.all(
-          uniqueCodes.map(async (code) => {
-            const representativeCourse = sections.find((course) => course.code === code);
-            if (!representativeCourse) return;
-            const d = await fetchDifficulty(representativeCourse);
-            if (d !== null) difficulties[code] = d;
-          }),
-        );
-      }
+            ).slice(0, 80)
+          : scopedRelevantCourses;
 
       const aiPayload = {
         message: text,
         sections: sections.map(courseToAiPayload),
-        relevantCourses: relevantCourses.map(courseToAiPayload),
+        relevantCourses: scopedRelevantCourses.map(courseToAiPayload),
         scheduledCourses: scheduledCourses.map(courseToAiPayload),
         favoriteCourses: favoriteCourses.slice(0, 40).map(courseToAiPayload),
         selectedCourse: selectedCourse ? courseToAiPayload(selectedCourse) : null,
@@ -898,23 +853,10 @@ export function AIScheduler({
         activeSlot,
         semesterLabel,
         termId,
-        difficulties,
-        history: updatedMessages,
         universityId,
       };
 
       let data = await postAiSchedule(aiPayload);
-      if (
-        typeof data?.summary === "string"
-        && looksGenericAiSummary(data.summary)
-        && (advisorQuestion || Boolean(selectedCourse) || courseCodes.length > 0)
-      ) {
-        data = await postAiSchedule({
-          ...aiPayload,
-          relevantCourses: allCourses.slice(0, 240).map(courseToAiPayload),
-          sections: allCourses.slice(0, 240).map(courseToAiPayload),
-        });
-      }
 
       const contextStillCurrent = contextKeyRef.current === requestContextKey;
       const requestStillCurrent = requestIdRef.current === requestId;

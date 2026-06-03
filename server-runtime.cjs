@@ -20,7 +20,7 @@ const {
 } = require("./catalogStore.cjs");
 const {
   buildAdvisorLocalResponse,
-  buildAdvisorPromptContext,
+  getAdvisorIntent,
 } = require("./advisorKnowledge.cjs");
 const {
   archiveAnnouncement,
@@ -1362,6 +1362,12 @@ app.post("/api/ai-schedule", async (req, res) => {
     const requestedTermId = normalizeTermId(req.body?.termId || req.body?.catalogStats?.termId || "");
     const requestedSemesterLabel = String(req.body?.semesterLabel ?? req.body?.catalogStats?.semesterLabel ?? "").trim();
     const university = buildUniversityContext(universityId, req.body?.catalogStats ?? null);
+    const intent = getAdvisorIntent(message);
+    const selectedCourse = req.body?.selectedCourse || null;
+    const relevantCourses = array(req.body?.relevantCourses).slice(0, 80);
+    const sections = array(req.body?.sections).slice(0, 80);
+    const favoriteCourses = array(req.body?.favoriteCourses).slice(0, 40);
+    const scheduledCourses = array(req.body?.scheduledCourses).slice(0, 40);
     const universityTerms = getTermsForUniversity(universityId);
     const resolvedTerm = resolveAdvisorTermSelection(
       universityId,
@@ -1371,58 +1377,71 @@ app.post("/api/ai-schedule", async (req, res) => {
     );
     const effectiveTermId = resolvedTerm.effectiveTermId || requestedTermId;
     const semesterLabel = resolvedTerm.effectiveTermLabel || requestedSemesterLabel;
-    const liveCatalogCourses = getCoursesForTerm({ universityId, termId: effectiveTermId, search: "" });
-    const universityWideCourses = getAllCoursesForUniversity(universityId);
     const mergedCourses = mergeAdvisorCourses(
-      liveCatalogCourses,
-      array(req.body?.sections),
-      array(req.body?.relevantCourses),
-      array(req.body?.scheduledCourses),
-      array(req.body?.favoriteCourses),
-      req.body?.selectedCourse ? [req.body.selectedCourse] : [],
+      sections,
+      relevantCourses,
+      scheduledCourses,
+      favoriteCourses,
+      selectedCourse ? [selectedCourse] : [],
+    ).slice(0, 160);
+    const liveCatalogCourses = mergedCourses.length
+      ? []
+      : getCoursesForTerm({ universityId, termId: effectiveTermId, search: "" }).slice(0, 160);
+    const advisorCourses = (mergedCourses.length ? mergedCourses : liveCatalogCourses).slice(0, 160);
+    const incomingCatalogStats = req.body?.catalogStats ?? null;
+    const catalogStats = incomingCatalogStats && typeof incomingCatalogStats === "object"
+      ? {
+          ...incomingCatalogStats,
+          universityId,
+          universityName: university.name,
+          semesterLabel: requestedSemesterLabel || incomingCatalogStats.semesterLabel || "",
+          termId: effectiveTermId || incomingCatalogStats.termId || "",
+          updatedAt: incomingCatalogStats.updatedAt ?? getUniversitiesResponse().find((entry) => entry.id === universityId)?.updatedAt ?? null,
+          resolutionNote: resolvedTerm.resolutionNote || incomingCatalogStats.resolutionNote || "",
+          effectiveTermLabel: semesterLabel || incomingCatalogStats.effectiveTermLabel || incomingCatalogStats.semesterLabel || "",
+        }
+      : buildCatalogStats(
+          advisorCourses,
+          university,
+          semesterLabel,
+          incomingCatalogStats,
+          {
+            universityTerms,
+            effectiveTermId,
+            effectiveTermLabel: semesterLabel,
+            updatedAt: getUniversitiesResponse().find((entry) => entry.id === universityId)?.updatedAt ?? null,
+            resolutionNote: resolvedTerm.resolutionNote,
+          },
+        );
+    const needsUniversityWideCourses = Boolean(
+      selectedCourse
+      || intent.courseInquiry
+      || intent.broadCourseQuestion
+      || intent.abbreviationMeaning,
     );
-    const catalogStats = buildCatalogStats(
-      mergedCourses.length ? mergedCourses : liveCatalogCourses,
-      university,
-      semesterLabel,
-      req.body?.catalogStats ?? null,
-      {
-        universityTerms,
-        effectiveTermId,
-        effectiveTermLabel: semesterLabel,
-        updatedAt: req.body?.catalogStats?.updatedAt ?? getUniversitiesResponse().find((entry) => entry.id === universityId)?.updatedAt ?? null,
-        resolutionNote: resolvedTerm.resolutionNote,
-      },
-    );
+    const universityWideCourses = needsUniversityWideCourses
+      ? getAllCoursesForUniversity(universityId).slice(0, 1200)
+      : advisorCourses;
 
     const advisorResponse = buildAdvisorLocalResponse({
       message,
       university,
       semesterLabel,
       catalogStats,
-      advisorCourses: mergedCourses,
+      advisorCourses,
       universityCourses: universityWideCourses,
       universityTerms,
-      relevantCourses: array(req.body?.relevantCourses),
-      sections: array(req.body?.sections),
-      favoriteCourses: array(req.body?.favoriteCourses),
-      scheduledCourses: array(req.body?.scheduledCourses),
-      selectedCourse: req.body?.selectedCourse || null,
+      relevantCourses,
+      sections,
+      favoriteCourses,
+      scheduledCourses,
+      selectedCourse,
     });
 
     if (advisorResponse) {
       return res.json({
         ...advisorResponse,
         aiStatus: getAiStatusPayload(),
-        promptContext: buildAdvisorPromptContext({
-          message,
-          university,
-          semesterLabel,
-          catalogStats,
-          advisorCourses: mergedCourses,
-          universityTerms,
-          selectedCourse: req.body?.selectedCourse || null,
-        }),
       });
     }
 
