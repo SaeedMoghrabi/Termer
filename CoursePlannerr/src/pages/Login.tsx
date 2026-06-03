@@ -15,6 +15,7 @@ import {
   clearLocalAdminSession,
   hasLocalAdminSession,
 } from "../utils/localAdminSession.ts";
+import { TermerBrand, TermerMark } from "../components/TermerBrand.tsx";
 
 type AuthView = "login" | "signup" | "reset";
 
@@ -30,8 +31,6 @@ type FieldProps = {
 
 const LOGIN_PHONE_BY_EMAIL_STORAGE_KEY = "termer:login-phone-by-email";
 const CONTACT_PROFILE_TIMEOUT_MS = 1800;
-const TERMER_LOGO_SRC = "/branding/termer-logo.png";
-const TERMER_MARK_SRC = "/branding/termer-mark.png";
 
 const UNIVERSITY_NAME_ALIASES: Record<string, string[]> = {
   aub: ["aub", "american university of beirut", "mail.aub.edu", "aub.edu.lb"],
@@ -426,9 +425,13 @@ export default function Login() {
         <div className="uf-shell">
           <section className="uf-showcase" aria-label="Planner preview">
             <div className="uf-showcase__badge">Live Lebanese university scheduler</div>
-            <div className="uf-showcase__wordmarkShell">
-              <img className="uf-showcase__wordmark" src={TERMER_LOGO_SRC} alt="Termer" />
-            </div>
+            <TermerBrand
+              className="uf-showcase__brand"
+              markClassName="uf-showcase__brandMark"
+              wordmarkClassName="uf-showcase__brandWordmark"
+              subtitle="Lebanese universities"
+              subtitleClassName="uf-showcase__brandSubtitle"
+            />
             <h1>Build the semester before it builds you.</h1>
             <p>
               Sign in with your university email, land inside your own campus,
@@ -453,7 +456,7 @@ export default function Login() {
                 <span><strong>AI</strong> assist</span>
               </div>
               <div className="uf-visual__brand" aria-hidden="true">
-                <img className="uf-visual__brandImage" src={TERMER_MARK_SRC} alt="" />
+                <TermerMark className="uf-visual__brandImage" decorative />
               </div>
             </div>
           </section>
@@ -462,7 +465,7 @@ export default function Login() {
 
           <div className="uf-logo">
             <div className="uf-logo-shell">
-              <img className="uf-logo-image" src={TERMER_MARK_SRC} alt="Termer" />
+              <TermerMark className="uf-logo-image" decorative />
             </div>
             <div>
               <span className="uf-logo-name">Termer</span>
@@ -753,27 +756,38 @@ const css = `
     text-transform: uppercase;
   }
 
-  .uf-showcase__wordmarkShell {
-    width: fit-content;
+  .uf-showcase__brand {
     margin-top: 18px;
-    padding: 10px 12px;
-    border-radius: 24px;
-    background: rgba(3, 8, 18, .88);
-    border: 1px solid rgba(255,255,255,.08);
-    box-shadow:
-      0 18px 42px rgba(0,0,0,.28),
-      0 0 0 1px rgba(var(--login-primary-rgb, 32, 214, 255), 0.08);
+    align-items: center;
+    gap: 16px;
   }
 
-  .uf-showcase__wordmark {
-    display: block;
-    width: min(320px, 100%);
+  .uf-showcase__brandMark {
+    width: clamp(88px, 10vw, 116px);
     height: auto;
+    filter:
+      drop-shadow(0 14px 26px rgba(0,0,0,.24))
+      drop-shadow(0 0 26px rgba(143, 215, 192, 0.08));
+  }
+
+  .uf-showcase__brandWordmark {
+    font-size: clamp(42px, 6vw, 60px);
+    letter-spacing: -.07em;
+    line-height: .92;
+  }
+
+  .uf-showcase__brandSubtitle {
+    margin-top: 8px;
+    color: rgba(237,247,255,.52);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .16em;
+    text-transform: uppercase;
   }
 
   .uf-showcase h1 {
     max-width: 620px;
-    margin: 26px 0 16px;
+    margin: 28px 0 16px;
     font-family: 'Space Grotesk', sans-serif;
     font-size: clamp(42px, 6vw, 76px);
     line-height: .92;
@@ -889,13 +903,11 @@ const css = `
   }
 
   .uf-visual__brandImage {
-    width: min(150px, 42%);
+    width: min(118px, 32%);
     height: auto;
-    padding: 12px;
-    border-radius: 22px;
-    background: rgba(2, 8, 18, .82);
-    border: 1px solid rgba(255,255,255,.08);
-    box-shadow: 0 18px 38px rgba(0,0,0,.24);
+    filter:
+      drop-shadow(0 12px 24px rgba(0,0,0,.22))
+      drop-shadow(0 0 16px rgba(143, 215, 192, 0.06));
   }
 
   .uf-card {
@@ -928,17 +940,23 @@ const css = `
     align-items: center;
     justify-content: center;
     border-radius: 24px;
-    background: rgba(2, 8, 18, .88);
-    border: 1px solid rgba(255,255,255,.08);
+    background:
+      linear-gradient(145deg, rgba(12,16,28,.9), rgba(23,31,46,.55)),
+      radial-gradient(circle at top left, rgba(143,215,192,.1), transparent 52%);
+    border: 1px solid rgba(255,255,255,.09);
     box-shadow:
       0 18px 42px rgba(0,0,0,.28),
-      0 0 0 1px rgba(var(--login-secondary-rgb, 81, 240, 185), 0.08);
+      inset 0 1px 0 rgba(255,255,255,.04),
+      0 0 0 1px rgba(var(--login-secondary-rgb, 81, 240, 185), 0.05);
   }
 
   .uf-logo-image {
     display: block;
-    width: 100%;
+    width: 82%;
     height: auto;
+    filter:
+      drop-shadow(0 8px 18px rgba(0,0,0,.2))
+      drop-shadow(0 0 14px rgba(143, 215, 192, 0.06));
   }
 
   .uf-logo-name,

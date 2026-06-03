@@ -17,6 +17,7 @@ import {
   getGradingSystem,
   getTopGrade,
 } from "../config/gradingSystems.ts";
+import { TermerMark } from "./TermerBrand.tsx";
 import type { Course } from "../types";
 import type { UniversityId, UniversityOption } from "../config/universities.ts";
 import { useSessionAccess } from "../hooks/useSessionAccess.ts";
@@ -57,8 +58,6 @@ type CurrentNameProfile = {
 };
 
 const REQUIRED_NAME_REFRESH_AT = Date.parse("2026-05-31T00:00:00.000Z");
-const TERMER_MARK_SRC = "/branding/termer-mark.png";
-
 function buildInitialGpaRows(courses: Course[], defaultGrade: string) {
   return courses.length > 0
     ? courses.map((course) => ({
@@ -735,11 +734,7 @@ export function TopNav({
             aria-label={`Refresh ${appName}`}
           >
             <span className="topNav__logoFrame" aria-hidden="true">
-              <img
-                className="topNav__logoImage"
-                src={TERMER_MARK_SRC}
-                alt=""
-              />
+              <TermerMark className="topNav__logoImage" decorative />
             </span>
             <span className="topNav__brandText">{appName}</span>
           </button>

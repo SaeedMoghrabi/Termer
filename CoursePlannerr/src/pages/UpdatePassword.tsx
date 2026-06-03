@@ -2,8 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient.ts";
-
-const TERMER_MARK_SRC = "/branding/termer-mark.png";
+import { TermerMark } from "../components/TermerBrand.tsx";
 
 export default function UpdatePassword() {
   const navigate = useNavigate();
@@ -70,7 +69,7 @@ export default function UpdatePassword() {
 
           <div className="uf-logo">
             <div className="uf-logo-shell">
-              <img className="uf-logo-image" src={TERMER_MARK_SRC} alt="Termer" />
+              <TermerMark className="uf-logo-image" decorative />
             </div>
             <div className="uf-logo-copy">
               <span className="uf-logo-name">Termer</span>
@@ -159,11 +158,22 @@ const css = `
     align-items: center;
     justify-content: center;
     border-radius: 22px;
-    background: #05070d;
+    background:
+      linear-gradient(145deg, rgba(12,16,28,.96), rgba(23,31,46,.7)),
+      radial-gradient(circle at top left, rgba(143,215,192,.08), transparent 52%);
     border: 1px solid rgba(15, 23, 42, 0.12);
-    box-shadow: 0 14px 32px rgba(15,23,42,0.12);
+    box-shadow:
+      0 14px 32px rgba(15,23,42,0.12),
+      inset 0 1px 0 rgba(255,255,255,.05);
   }
-  .uf-logo-image { display: block; width: 100%; height: auto; }
+  .uf-logo-image {
+    display: block;
+    width: 78%;
+    height: auto;
+    filter:
+      drop-shadow(0 8px 18px rgba(0,0,0,.18))
+      drop-shadow(0 0 14px rgba(143, 215, 192, 0.06));
+  }
   .uf-logo-copy { display: flex; flex-direction: column; gap: 4px; }
   .uf-logo-name {
     font-size: 24px;

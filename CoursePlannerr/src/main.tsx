@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App'
+import { TermerMark } from './components/TermerBrand.tsx'
 import { API_DIAGNOSTICS, APP_BASE_PATH } from './config/runtime.ts'
 import { clearTermerClientState, reconcileClientBuild } from './utils/plannerPreferences.ts'
 
@@ -21,11 +22,7 @@ function renderFatalStartup(error: unknown) {
   ReactDOM.createRoot(rootElement).render(
     <React.StrictMode>
       <div className="plannerCrashFallback" role="alert" aria-live="assertive">
-        <img
-          className="plannerCrashFallback__logo"
-          src="/branding/termer-mark.png"
-          alt="Termer"
-        />
+        <TermerMark className="plannerCrashFallback__logo" />
         <div className="plannerCrashFallback__eyebrow">Startup blocked</div>
         <strong>Termer could not finish booting the app.</strong>
         <span>
