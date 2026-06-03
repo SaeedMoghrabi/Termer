@@ -1762,6 +1762,14 @@ if (fs.existsSync(CLIENT_DIST_DIR)) {
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
   reloadCatalogCache();
+  setTimeout(() => {
+    try {
+      getUniversitiesResponse();
+      console.log("[catalogs] in-memory university catalogs primed.");
+    } catch (error) {
+      console.warn("[catalogs] could not prime in-memory catalogs.", error?.message || error);
+    }
+  }, 50);
   if (manualImportWatchersEnabled) {
     startManualImportWatchers();
   } else {

@@ -108,7 +108,7 @@ function resolveSeedPreferredTermId(terms: CatalogTerm[], preferredTermId = "") 
   return terms[0]?.code ?? "";
 }
 
-async function fetchSeedTerms(universityId: string): Promise<CatalogTerm[]> {
+export async function fetchSeedTerms(universityId: string): Promise<CatalogTerm[]> {
   const seedCatalog = await fetchSeedCatalog(universityId);
   const terms = Array.isArray(seedCatalog?.terms) ? seedCatalog.terms : [];
 
@@ -121,7 +121,7 @@ async function fetchSeedTerms(universityId: string): Promise<CatalogTerm[]> {
   }));
 }
 
-async function fetchSeedCourses(universityId: string, termId: string): Promise<any[]> {
+export async function fetchSeedCourses(universityId: string, termId: string): Promise<any[]> {
   const seedCatalog = await fetchSeedCatalog(universityId);
   const courses = Array.isArray(seedCatalog?.courses) ? seedCatalog.courses : [];
   const rawTermCode = stripUniversityPrefix(universityId, termId);

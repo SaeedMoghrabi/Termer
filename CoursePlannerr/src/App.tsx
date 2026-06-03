@@ -31,12 +31,11 @@ import {
 } from "./utils/catalogApi.ts";
 import { useCatalogStatus } from "./hooks/useCatalogStatus.ts";
 import { useSessionAccess } from "./hooks/useSessionAccess.ts";
-import { primeUniversityCatalogCache } from "./utils/catalogWarmup.ts";
+import { primeAllUniversitySnapshotCaches, primeUniversityCatalogCache } from "./utils/catalogWarmup.ts";
 import {
   getCachedCourses,
   getCachedScheduleSnapshot,
   getCachedTerms,
-  clearTermerClientState,
   getStoredTermId,
   getStoredUniversityId,
   setCachedCourses,
@@ -657,8 +656,6 @@ export default function App() {
   const semestersRef = useRef<TermOption[]>(initialSemesters);
   const [termsLoading, setTermsLoading] = useState(false);
   const [coursesLoading, setCoursesLoading] = useState(false);
-  const [catalogLoadError, setCatalogLoadError] = useState("");
-  const [catalogStatusMessage, setCatalogStatusMessage] = useState("");
   const homeMountedAtRef = useRef<number>(
     typeof performance !== "undefined" ? performance.now() : Date.now(),
   );
@@ -821,7 +818,6 @@ export default function App() {
     const requestUniversityId = universityId;
     const cachedTerms = getCachedTerms(requestUniversityId);
     setTermsLoading(cachedTerms.length === 0);
-    setCatalogLoadError("");
 
     const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
     bootstrapTimingRef.current = {
@@ -841,9 +837,6 @@ export default function App() {
             resolvePreferredTermId(requestUniversityId, cachedTerms, semesterIdRef.current),
           )
         : [];
-      if (cachedTerms.length === 0 && cachedCourses.length === 0) {
-        setCatalogStatusMessage("Waking up server and loading courses...");
-      }
       if (bootstrapTimingRef.current && !bootstrapTimingRef.current.loggedWake) {
         bootstrapTimingRef.current.loggedWake = true;
         console.info("[Termer startup] bootstrap still pending", {
@@ -889,9 +882,6 @@ export default function App() {
           if (nextSemesterId && primedCourses.length > 0) {
             setCachedCourses(requestUniversityId, nextSemesterId, primedCourses);
             courseDataSignatureRef.current = buildCourseDataSignature(primedCourses);
-          }
-          if (formatted.length > 0 || primedCourses.length > 0) {
-            setCatalogStatusMessage("Showing saved snapshot while live courses refresh...");
           }
 
           startTransition(() => {
@@ -985,11 +975,6 @@ export default function App() {
           durationMs:
             (typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt,
         });
-        if (primedCourses.length > 0) {
-          setCatalogStatusMessage("");
-        } else if (formatted.length > 0) {
-          setCatalogStatusMessage("Loading course sections for the selected term...");
-        }
         startTransition(() => {
           setSemesters(formatted);
           setSemesterId((currentSemesterId) =>
@@ -1024,8 +1009,6 @@ export default function App() {
             (typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt,
         });
         if (!cachedTerms.length) return;
-        setCatalogLoadError("The live server is still waking up. Termer is using the saved catalog snapshot for now.");
-        setCatalogStatusMessage("Using the saved course snapshot while the live server wakes up...");
         startTransition(() => {
           setSemesters(cachedTerms);
           setSemesterId((currentSemesterId) =>
@@ -1105,6 +1088,12 @@ export default function App() {
       window.clearTimeout(timer);
     };
   }, [semesterId, universityId]);
+
+  useEffect(() => {
+    void primeAllUniversitySnapshotCaches().catch(() => {
+      // Snapshot priming stays silent; current-university loading still handles visible data.
+    });
+  }, []);
 
   useEffect(() => {
     termRequestIdRef.current += 1;
@@ -1212,8 +1201,6 @@ export default function App() {
 
         courseDataSignatureRef.current = nextSignature;
         setCachedCourses(requestUniversityId, resolvedTermId, nextCourses);
-        setCatalogLoadError("");
-        setCatalogStatusMessage("");
         console.info("[Termer startup] courses rendered", {
           universityId: requestUniversityId,
           termId: resolvedTermId,
@@ -1230,8 +1217,6 @@ export default function App() {
             const cachedSignature = buildCourseDataSignature(cachedCourses);
             if (cachedSignature === courseDataSignatureRef.current) return;
             courseDataSignatureRef.current = cachedSignature;
-            setCatalogLoadError("The live server is still waking up. Showing saved courses for now.");
-            setCatalogStatusMessage("Using saved courses while the server wakes up...");
             startTransition(() => {
               setAllCourses(cachedCourses);
             });
@@ -1269,8 +1254,6 @@ export default function App() {
           const fallbackSignature = buildCourseDataSignature(fallbackCatalog.courses);
           if (fallbackSignature === courseDataSignatureRef.current) return;
           courseDataSignatureRef.current = fallbackSignature;
-          setCatalogLoadError("The live server is still waking up. Showing saved courses for now.");
-          setCatalogStatusMessage("Using saved courses while the server wakes up...");
           startTransition(() => {
             setAllCourses(fallbackCatalog.courses);
           });
@@ -1340,11 +1323,6 @@ export default function App() {
   }, [catalogStatusSequence, loadCourses, loadTerms, loadUniversities]);
 
   const catalogLoading = termsLoading || coursesLoading || (!semesterId && semesters.length === 0);
-  const showCatalogStatusBanner = Boolean(
-    catalogLoading
-    || catalogLoadError
-    || (catalogStatusMessage && allCourses.length === 0),
-  );
 
   const handleRecoverCatalogCourses = useCallback((courses: Course[], recoveredTermId: string) => {
     if (
@@ -1993,32 +1971,6 @@ export default function App() {
         className={`mainContainer${isCompactMobileHome ? " mainContainer--compactMobileHome" : ""}`}
         id="planner-main"
       >
-        {showCatalogStatusBanner ? (
-          <section className="catalogStatusBanner" role="status" aria-live="polite">
-            <div className="catalogStatusBanner__copy">
-              <strong>{catalogLoadError ? "Live catalog still waking up" : "Loading courses"}</strong>
-              <span>
-                {catalogLoadError
-                  || catalogStatusMessage
-                  || "Termer is loading the selected university and term right now."}
-              </span>
-            </div>
-            <div className="catalogStatusBanner__actions">
-              <button type="button" onClick={() => loadTerms()}>
-                Retry loading courses
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  clearTermerClientState();
-                  window.location.reload();
-                }}
-              >
-                Clear local app state
-              </button>
-            </div>
-          </section>
-        ) : null}
         {!isCompactMobileHome ? (
           <PlannerErrorBoundary
             resetKey={`${coursePanelsResetKey}:left-panel`}

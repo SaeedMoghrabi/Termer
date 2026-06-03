@@ -1,6 +1,12 @@
-import { getUniversityById } from "../config/universities.ts";
+import { getUniversityById, UNIVERSITY_OPTIONS } from "../config/universities.ts";
 import { mapApiCoursesToCourses } from "./courseApi.ts";
-import { fetchCatalogBootstrap, fetchCourses, fetchSeedCatalogBootstrap } from "./catalogApi.ts";
+import {
+  fetchCatalogBootstrap,
+  fetchCourses,
+  fetchSeedCatalogBootstrap,
+  fetchSeedCourses,
+  fetchSeedTerms,
+} from "./catalogApi.ts";
 import {
   getCachedCourses,
   getCachedTerms,
@@ -29,6 +35,7 @@ type PrimeUniversityCatalogResult = {
 };
 
 const inFlightCatalogPrimes = new Map<string, Promise<PrimeUniversityCatalogResult>>();
+let allUniversitySnapshotsPrimed: Promise<void> | null = null;
 
 function formatCatalogTerms(data: Array<{ code: string; description: string; is_current?: boolean }>): WarmTermOption[] {
   return Array.isArray(data)
@@ -96,6 +103,61 @@ async function warmTermCourses(universityId: string, termId: string) {
   }
 
   return mappedCourses;
+}
+
+async function primeUniversitySeedSnapshotCache(universityId: string): Promise<void> {
+  const normalizedUniversityId = getUniversityById(universityId).id;
+  let terms: WarmTermOption[] = getCachedTerms(normalizedUniversityId) as WarmTermOption[];
+
+  if (terms.length === 0) {
+    try {
+      const seedTerms = formatCatalogTerms(await fetchSeedTerms(normalizedUniversityId));
+      if (seedTerms.length > 0) {
+        terms = seedTerms;
+        setCachedTerms(normalizedUniversityId, seedTerms);
+      }
+    } catch {
+      return;
+    }
+  }
+
+  if (terms.length === 0) {
+    return;
+  }
+
+  const selectedTermId = resolvePreferredTermId(normalizedUniversityId, terms);
+  if (selectedTermId) {
+    setStoredTermId(normalizedUniversityId, selectedTermId);
+  }
+
+  await Promise.allSettled(
+    terms.map(async (term) => {
+      if (!term.id || getCachedCourses(normalizedUniversityId, term.id).length > 0) {
+        return;
+      }
+
+      const rawCourses = await fetchSeedCourses(normalizedUniversityId, term.id);
+      const mappedCourses = mapAndFilterUniversityCourses(rawCourses, normalizedUniversityId);
+      if (mappedCourses.length > 0) {
+        setCachedCourses(normalizedUniversityId, term.id, mappedCourses);
+      }
+    }),
+  );
+}
+
+export function primeAllUniversitySnapshotCaches(): Promise<void> {
+  if (allUniversitySnapshotsPrimed) {
+    return allUniversitySnapshotsPrimed;
+  }
+
+  allUniversitySnapshotsPrimed = Promise.allSettled(
+    UNIVERSITY_OPTIONS.map((university) => primeUniversitySeedSnapshotCache(university.id)),
+  ).then(() => undefined)
+    .finally(() => {
+      allUniversitySnapshotsPrimed = null;
+    });
+
+  return allUniversitySnapshotsPrimed;
 }
 
 export async function primeUniversityCatalogCache(
