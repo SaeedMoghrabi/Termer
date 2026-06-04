@@ -455,7 +455,7 @@ export default function Previouses() {
             <StatTile label="Unlocked files" value={stats.unlockCount} hint="Full previouses already opened by this account." />
           </div>
 
-          <div className="previousesPage__search" style={{ position: "relative" }}>
+          <div className="previousesPage__search" style={{ display: "grid", gap: 8 }}>
             <input
               className="previousesPage__searchInput"
               value={courseSearch}
@@ -480,10 +480,10 @@ export default function Previouses() {
               }}
             />
             {loadingSearch ? (
-              <div style={{ marginTop: 8, fontSize: 12, color: "var(--muted)" }}>Searching courses...</div>
+              <div style={{ fontSize: 12, color: "var(--muted)" }}>Searching courses...</div>
             ) : null}
             {courseResults.length > 0 ? (
-              <div className="previousesPage__searchResults" style={{ ...cardStyle, position: "absolute", top: "calc(100% + 8px)", left: 0, right: 0, zIndex: 20, overflow: "hidden" }}>
+              <div className="previousesPage__searchResults" style={{ ...cardStyle, overflow: "hidden" }}>
                 {courseResults.slice(0, 10).map((course) => (
                   <button
                     key={`${course.department}-${course.course_number}`}
