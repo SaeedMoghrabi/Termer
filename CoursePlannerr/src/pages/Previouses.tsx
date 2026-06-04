@@ -182,6 +182,7 @@ export default function Previouses() {
       : currentUniversity.note,
     [currentUniversity.note, selectedCourse],
   );
+  const uploadButtonDisabled = !selectedCourse || !selectedFile || uploading || !userId;
 
   const handleUniversityChange = useCallback((nextUniversityId: UniversityId) => {
     const resolvedUniversityId = !canChooseAnyUniversity && lockedUniversityId
@@ -508,17 +509,36 @@ export default function Previouses() {
           </div>
         </section>
 
-        {selectedCourse ? (
-          <section className="previousesPage__contentGrid" style={{ marginTop: 22, display: "grid", gridTemplateColumns: "minmax(0, 360px) minmax(0, 1fr)", gap: 20 }}>
+        <section className="previousesPage__contentGrid" style={{ marginTop: 22, display: "grid", gridTemplateColumns: "minmax(0, 360px) minmax(0, 1fr)", gap: 20 }}>
             <div className="previousesPage__uploadCard" style={{ ...cardStyle, padding: 20, alignSelf: "start" }}>
+              {!selectedCourse ? (
+                <div
+                  style={{
+                    marginBottom: 16,
+                    padding: "12px 14px",
+                    borderRadius: 14,
+                    border: "1px solid rgba(var(--brand-primary-rgb), 0.18)",
+                    background: "linear-gradient(180deg, rgba(var(--brand-primary-rgb), 0.10), rgba(255,255,255,0.02))",
+                    fontSize: 13,
+                    color: "var(--muted)",
+                    lineHeight: 1.65,
+                  }}
+                >
+                  Search and select a course above first. The upload form stays here so you can always see where to contribute a previous.
+                </div>
+              ) : null}
               <div style={{ fontSize: 12, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>
                 Upload a previous
               </div>
               <div style={{ marginTop: 8, fontSize: 22, fontWeight: 800 }}>
-                {selectedCourse.department} {selectedCourse.course_number}
+                {selectedCourse
+                  ? `${selectedCourse.department} ${selectedCourse.course_number}`
+                  : "Choose a course first"}
               </div>
               <div style={{ marginTop: 6, fontSize: 13, color: "var(--muted)", lineHeight: 1.6 }}>
-                {selectedCourse.title}
+                {selectedCourse
+                  ? selectedCourse.title
+                  : "Once you pick a course from the search box above, you can upload a PDF or image previous here."}
               </div>
 
               <div className="previousesPage__uploadForm" style={{ display: "grid", gap: 10, marginTop: 18 }}>
@@ -527,12 +547,14 @@ export default function Previouses() {
                   value={documentTitle}
                   onChange={(event) => setDocumentTitle(event.target.value)}
                   placeholder="Document title (e.g. Final 2025 - Group A)"
+                  disabled={!selectedCourse}
                   style={{ width: "100%", boxSizing: "border-box", background: "var(--panel2)", border: "1px solid var(--border)", color: "var(--text)", borderRadius: 12, padding: "11px 12px", fontSize: 13 }}
                 />
                 <select
                   className="previousesPage__field"
                   value={documentKind}
                   onChange={(event) => setDocumentKind(event.target.value)}
+                  disabled={!selectedCourse}
                   style={{ width: "100%", boxSizing: "border-box", background: "var(--panel2)", border: "1px solid var(--border)", color: "var(--text)", borderRadius: 12, padding: "11px 12px", fontSize: 13 }}
                 >
                   <option>Midterm</option>
@@ -546,6 +568,7 @@ export default function Previouses() {
                   value={examTermLabel}
                   onChange={(event) => setExamTermLabel(event.target.value)}
                   placeholder="Exam term / year (e.g. Spring 2025-2026)"
+                  disabled={!selectedCourse}
                   style={{ width: "100%", boxSizing: "border-box", background: "var(--panel2)", border: "1px solid var(--border)", color: "var(--text)", borderRadius: 12, padding: "11px 12px", fontSize: 13 }}
                 />
                 <textarea
@@ -554,6 +577,7 @@ export default function Previouses() {
                   onChange={(event) => setNote(event.target.value)}
                   placeholder="Optional note about the version, language, or professor"
                   rows={3}
+                  disabled={!selectedCourse}
                   style={{ width: "100%", boxSizing: "border-box", background: "var(--panel2)", border: "1px solid var(--border)", color: "var(--text)", borderRadius: 12, padding: "11px 12px", fontSize: 13, resize: "vertical" }}
                 />
                 <label className="previousesPage__fileField" style={{ display: "grid", gap: 8 }}>
@@ -562,6 +586,7 @@ export default function Previouses() {
                     className="previousesPage__fileInput"
                     type="file"
                     accept=".pdf,.png,.jpg,.jpeg,.webp"
+                    disabled={!selectedCourse}
                     onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
                   />
                 </label>
@@ -573,7 +598,7 @@ export default function Previouses() {
                 <button
                   className="previousesPage__uploadButton"
                   type="button"
-                  disabled={!selectedFile || uploading || !userId}
+                  disabled={uploadButtonDisabled}
                   onClick={handleUpload}
                   style={{
                     background: "linear-gradient(135deg, var(--brand-primary), var(--brand-surface))",
@@ -582,11 +607,15 @@ export default function Previouses() {
                     borderRadius: 12,
                     padding: "12px 14px",
                     fontWeight: 800,
-                    cursor: !selectedFile || uploading || !userId ? "not-allowed" : "pointer",
-                    opacity: !selectedFile || uploading || !userId ? 0.7 : 1,
+                    cursor: uploadButtonDisabled ? "not-allowed" : "pointer",
+                    opacity: uploadButtonDisabled ? 0.7 : 1,
                   }}
                 >
-                  {uploading ? "Uploading and screening..." : "Upload previous"}
+                  {uploading
+                    ? "Uploading and screening..."
+                    : !selectedCourse
+                      ? "Select a course to upload"
+                      : "Upload previous"}
                 </button>
                 <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.65 }}>
                   The AI screens each file for course match, exam wording, and likely unrelated material before it becomes usable.
@@ -608,25 +637,37 @@ export default function Previouses() {
                       Approved library
                     </div>
                     <div style={{ fontSize: 20, fontWeight: 800, marginTop: 6 }}>
-                      {selectedCourse.department} {selectedCourse.course_number} previouses
+                      {selectedCourse
+                        ? `${selectedCourse.department} ${selectedCourse.course_number} previouses`
+                        : "Search above to open a course library"}
                     </div>
                     <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 4 }}>
-                      Students can preview the top section free. Full files unlock after contribution.
+                      {selectedCourse
+                        ? "Students can preview the top section free. Full files unlock after contribution."
+                        : "Pick a course to browse its approved previouses, preview pages, and unlock full files."}
                     </div>
                   </div>
                   <div style={{ fontSize: 12, color: "var(--muted)" }}>
-                    {loadingDocuments ? "Refreshing..." : `${documents.length} document${documents.length === 1 ? "" : "s"}`}
+                    {selectedCourse
+                      ? loadingDocuments
+                        ? "Refreshing..."
+                        : `${documents.length} document${documents.length === 1 ? "" : "s"}`
+                      : "No course selected yet"}
                   </div>
                 </div>
               </div>
 
-              {documents.length === 0 && !loadingDocuments ? (
+              {!selectedCourse ? (
+                <div className="previousesPage__emptyLibrary" style={{ ...cardStyle, padding: 22, fontSize: 14, color: "var(--muted)" }}>
+                  Search for a course above, choose it from the dropdown, and this library will load all approved previouses for that course.
+                </div>
+              ) : documents.length === 0 && !loadingDocuments ? (
                 <div className="previousesPage__emptyLibrary" style={{ ...cardStyle, padding: 22, fontSize: 14, color: "var(--muted)" }}>
                   No previouses are approved for this course yet. Upload the first one and the AI will screen it.
                 </div>
               ) : null}
 
-              {documents.map((document) => (
+              {selectedCourse ? documents.map((document) => (
                 <article key={document.id} className="previousesPage__document" style={{ ...cardStyle, overflow: "hidden" }}>
                   <div className="previousesPage__documentGrid" style={{ display: "grid", gridTemplateColumns: "minmax(0, 320px) minmax(0, 1fr)", gap: 0 }}>
                     <div className="previousesPage__previewPane" style={{ position: "relative", minHeight: 260, background: "linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01))", borderRight: "1px solid var(--border)" }}>
@@ -766,10 +807,9 @@ export default function Previouses() {
                     </div>
                   </div>
                 </article>
-              ))}
+              )) : null}
             </div>
           </section>
-        ) : null}
       </main>
     </div>
   );
