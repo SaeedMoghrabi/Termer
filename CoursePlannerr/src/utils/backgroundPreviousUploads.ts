@@ -49,6 +49,7 @@ type PreviousUploadResponse = {
 const STORAGE_KEY = "termer.previous-upload-tasks.v2";
 const REVIEW_POLL_MS = 3200;
 const AUTO_DISMISS_MS = 12000;
+const UPLOAD_REQUEST_TIMEOUT_MS = 45000;
 
 const listeners = new Set<(tasks: PreviousUploadTask[]) => void>();
 const pollTimers = new Map<string, number>();
@@ -74,6 +75,11 @@ function buildTaskId() {
   }
 
   return `previous-upload-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function createUploadAbortController() {
+  if (typeof AbortController === "undefined") return null;
+  return new AbortController();
 }
 
 function readFileAsDataUrl(file: File) {
@@ -338,12 +344,18 @@ async function runUploadTask(taskId: string, request: PreviousUploadRequest) {
     message: "Uploading your file now. You can leave Previouses and keep using the rest of Termer.",
   });
 
+  const uploadController = createUploadAbortController();
+  const uploadTimeoutId = typeof window !== "undefined"
+    ? window.setTimeout(() => uploadController?.abort(), UPLOAD_REQUEST_TIMEOUT_MS)
+    : 0;
+
   try {
     await new Promise((resolve) => window.setTimeout(resolve, 40));
     const fileDataUrl = await readFileAsDataUrl(request.file);
     const response = await fetch(`${API}/api/previouses/upload`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: uploadController?.signal,
       body: JSON.stringify({
         userId: request.userId,
         userEmail: request.userEmail,
@@ -381,11 +393,20 @@ async function runUploadTask(taskId: string, request: PreviousUploadRequest) {
       });
     }
   } catch (error) {
+    const timedOut = error instanceof DOMException && error.name === "AbortError";
     patchTask(taskId, {
       status: "failed",
-      message: error instanceof Error ? error.message : "Upload failed.",
+      message: timedOut
+        ? "Uploading took too long, so Termer stopped waiting. Please try the upload again."
+        : error instanceof Error
+          ? error.message
+          : "Upload failed.",
     });
     clearPollTimer(taskId);
+  } finally {
+    if (uploadTimeoutId && typeof window !== "undefined") {
+      window.clearTimeout(uploadTimeoutId);
+    }
   }
 }
 

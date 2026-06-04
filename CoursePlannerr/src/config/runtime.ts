@@ -20,6 +20,10 @@ function isLocalHost(hostname = "") {
   return hostname === "localhost" || hostname === "127.0.0.1";
 }
 
+function isPreviewOrDevPort(port = "") {
+  return /^(417|517)\d*$/.test(port);
+}
+
 function resolveApiRoot() {
   const explicit = stripTrailingSlash(import.meta.env.VITE_API_URL || "");
   if (explicit) {
@@ -56,7 +60,7 @@ function resolveApiRoot() {
     };
   }
 
-  if (port === "5173" || port === "4173") {
+  if (isLocalHost(hostname) && isPreviewOrDevPort(port)) {
     return {
       viteApiUrl: "",
       resolvedApiRoot: `${protocol}//${hostname}:3001`,

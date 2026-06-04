@@ -1271,11 +1271,10 @@ app.post("/api/previouses/upload", async (req, res) => {
       sourcePages: 0,
     });
     const userStats = getUserPreviousStats(userId);
-    const isAdmin = await isAdminUser(userId);
 
     res.json({
       success: true,
-      document: buildPreviousClientDocument(created, userId, isAdmin, userStats),
+      document: buildPreviousClientDocument(created, userId, false, userStats),
       stats: userStats,
     });
 
