@@ -523,6 +523,58 @@ function FilterButton({
   );
 }
 
+function withTimeoutFallback<T>(promise: Promise<T>, fallback: T, timeoutMs: number) {
+  return new Promise<T>((resolve) => {
+    const timeoutId = window.setTimeout(() => resolve(fallback), timeoutMs);
+    promise
+      .then((value) => resolve(value))
+      .catch(() => resolve(fallback))
+      .finally(() => window.clearTimeout(timeoutId));
+  });
+}
+
+function safeSupabaseQuery<T>(
+  promiseLike: PromiseLike<{ data: T[] | null; error: { message?: string } | null }>,
+  label: string,
+  timeoutMs = 10000,
+) {
+  return withTimeoutFallback(
+    Promise.resolve(promiseLike).then((result) => ({
+      ...result,
+      __loadIssue: result.error ? label : "",
+    })),
+    {
+      data: null,
+      error: { message: `${label} timed out.` },
+      __loadIssue: label,
+    },
+    timeoutMs,
+  );
+}
+
+function safeAdminFetch(
+  url: string,
+  label: string,
+  timeoutMs = 8000,
+) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  return fetch(url, {
+    cache: "no-store",
+    signal: controller.signal,
+  })
+    .then((response) => response.json().catch(() => ({})))
+    .then((payload) => ({
+      ...(payload && typeof payload === "object" ? payload : {}),
+      __loadIssue: "",
+    }))
+    .catch(() => ({
+      __loadIssue: label,
+    }))
+    .finally(() => window.clearTimeout(timeoutId));
+}
+
 export default function AdminPortal() {
   const navigate = useNavigate();
   const [view, setView] = useState<DashboardView>("syllabi");
@@ -577,79 +629,106 @@ export default function AdminPortal() {
 
   const loadDashboard = async (requesterUserId = adminUserId) => {
     setLoading(true);
-    const [
-      syllabiResponse,
-      usersResponse,
-      profilesResponse,
-      courseRatingsResponse,
-      professorRatingsResponse,
-      schedulesResponse,
-      favoritesResponse,
-      announcementsResponse,
-      contactProfilesResponse,
-      previousesResponse,
-    ] = await Promise.all([
-      supabase.from("syllabi").select("*").order("created_at", { ascending: false }),
-      supabase.from("users").select("*").order("created_at", { ascending: false }),
-      supabase.from("profiles").select("*").order("updated_at", { ascending: false }),
-      supabase.from("course_ratings").select("*").order("created_at", { ascending: false }),
-      supabase.from("professor_ratings").select("*").order("created_at", { ascending: false }),
-      supabase.from("schedules").select("*").order("updated_at", { ascending: false }),
-      supabase.from("favorites").select("*").order("created_at", { ascending: false }),
-      requesterUserId
-        ? fetch(`${API_URL}/api/admin/announcements?requesterUserId=${encodeURIComponent(requesterUserId)}`, {
-            cache: "no-store",
-          })
-            .then((response) => response.json().catch(() => ({})))
-            .catch(() => ({}))
-        : Promise.resolve({}),
-      requesterUserId
-        ? fetch(`${API_URL}/api/admin/contact-profiles?requesterUserId=${encodeURIComponent(requesterUserId)}`, {
-            cache: "no-store",
-          })
-            .then((response) => response.json().catch(() => ({})))
-            .catch(() => ({}))
-        : Promise.resolve({}),
-      requesterUserId
-        ? fetch(`${API_URL}/api/admin/previouses?requesterUserId=${encodeURIComponent(requesterUserId)}`, {
-            cache: "no-store",
-          })
-            .then((response) => response.json().catch(() => ({})))
-            .catch(() => ({}))
-        : Promise.resolve({}),
-    ]);
+    try {
+      const [
+        syllabiResponse,
+        usersResponse,
+        profilesResponse,
+        courseRatingsResponse,
+        professorRatingsResponse,
+        schedulesResponse,
+        favoritesResponse,
+        announcementsResponse,
+        contactProfilesResponse,
+        previousesResponse,
+      ] = await Promise.all([
+        safeSupabaseQuery(
+          supabase.from("syllabi").select("*").order("created_at", { ascending: false }),
+          "Syllabi",
+        ),
+        safeSupabaseQuery(
+          supabase.from("users").select("*").order("created_at", { ascending: false }),
+          "Accounts",
+        ),
+        safeSupabaseQuery(
+          supabase.from("profiles").select("*").order("updated_at", { ascending: false }),
+          "Profiles",
+        ),
+        safeSupabaseQuery(
+          supabase.from("course_ratings").select("*").order("created_at", { ascending: false }),
+          "Course reviews",
+        ),
+        safeSupabaseQuery(
+          supabase.from("professor_ratings").select("*").order("created_at", { ascending: false }),
+          "Professor reviews",
+        ),
+        safeSupabaseQuery(
+          supabase.from("schedules").select("*").order("updated_at", { ascending: false }),
+          "Schedules",
+        ),
+        safeSupabaseQuery(
+          supabase.from("favorites").select("*").order("created_at", { ascending: false }),
+          "Favorites",
+        ),
+        requesterUserId
+          ? safeAdminFetch(
+              `${API_URL}/api/admin/announcements?requesterUserId=${encodeURIComponent(requesterUserId)}`,
+              "Updates feed",
+            )
+          : Promise.resolve({ __loadIssue: "" }),
+        requesterUserId
+          ? safeAdminFetch(
+              `${API_URL}/api/admin/contact-profiles?requesterUserId=${encodeURIComponent(requesterUserId)}`,
+              "Contact profiles",
+            )
+          : Promise.resolve({ __loadIssue: "" }),
+        requesterUserId
+          ? safeAdminFetch(
+              `${API_URL}/api/admin/previouses?requesterUserId=${encodeURIComponent(requesterUserId)}`,
+              "Previouses queue",
+            )
+          : Promise.resolve({ __loadIssue: "" }),
+      ]);
 
-    const responses = [
-      syllabiResponse,
-      usersResponse,
-      profilesResponse,
-      courseRatingsResponse,
-      professorRatingsResponse,
-      schedulesResponse,
-      favoritesResponse,
-    ];
-    const firstError = responses.find((response) => response.error)?.error;
-    if (firstError) {
-      showToast(firstError.message || "Some admin data could not be loaded.", false);
+      const loadIssues = [
+        syllabiResponse.__loadIssue,
+        usersResponse.__loadIssue,
+        profilesResponse.__loadIssue,
+        courseRatingsResponse.__loadIssue,
+        professorRatingsResponse.__loadIssue,
+        schedulesResponse.__loadIssue,
+        favoritesResponse.__loadIssue,
+        announcementsResponse.__loadIssue,
+        contactProfilesResponse.__loadIssue,
+        previousesResponse.__loadIssue,
+      ].filter(Boolean);
+
+      if (loadIssues.length > 0) {
+        showToast(
+          `Some admin data took too long to load: ${loadIssues.slice(0, 3).join(", ")}${loadIssues.length > 3 ? "..." : ""}`,
+          false,
+        );
+      }
+
+      setSyllabi((syllabiResponse.data ?? []) as Syllabus[]);
+      setUsers((usersResponse.data ?? []) as UserAccount[]);
+      setProfiles((profilesResponse.data ?? []) as ProfileRecord[]);
+      setCourseRatings((courseRatingsResponse.data ?? []) as CourseRating[]);
+      setProfessorRatings((professorRatingsResponse.data ?? []) as ProfessorRating[]);
+      setSchedules((schedulesResponse.data ?? []) as SavedSchedule[]);
+      setFavorites((favoritesResponse.data ?? []) as FavoriteCourse[]);
+      setAnnouncements(Array.isArray(announcementsResponse?.announcements) ? announcementsResponse.announcements : []);
+      setContactProfiles(Array.isArray(contactProfilesResponse?.profiles) ? contactProfilesResponse.profiles : []);
+      setPreviousDocuments(Array.isArray(previousesResponse?.documents) ? previousesResponse.documents : []);
+      setPreviousStats({
+        total: Number(previousesResponse?.stats?.total ?? 0) || 0,
+        pending: Number(previousesResponse?.stats?.pending ?? 0) || 0,
+        approved: Number(previousesResponse?.stats?.approved ?? 0) || 0,
+        rejected: Number(previousesResponse?.stats?.rejected ?? 0) || 0,
+      });
+    } finally {
+      setLoading(false);
     }
-
-    setSyllabi((syllabiResponse.data ?? []) as Syllabus[]);
-    setUsers((usersResponse.data ?? []) as UserAccount[]);
-    setProfiles((profilesResponse.data ?? []) as ProfileRecord[]);
-    setCourseRatings((courseRatingsResponse.data ?? []) as CourseRating[]);
-    setProfessorRatings((professorRatingsResponse.data ?? []) as ProfessorRating[]);
-    setSchedules((schedulesResponse.data ?? []) as SavedSchedule[]);
-    setFavorites((favoritesResponse.data ?? []) as FavoriteCourse[]);
-    setAnnouncements(Array.isArray(announcementsResponse?.announcements) ? announcementsResponse.announcements : []);
-    setContactProfiles(Array.isArray(contactProfilesResponse?.profiles) ? contactProfilesResponse.profiles : []);
-    setPreviousDocuments(Array.isArray(previousesResponse?.documents) ? previousesResponse.documents : []);
-    setPreviousStats({
-      total: Number(previousesResponse?.stats?.total ?? 0) || 0,
-      pending: Number(previousesResponse?.stats?.pending ?? 0) || 0,
-      approved: Number(previousesResponse?.stats?.approved ?? 0) || 0,
-      rejected: Number(previousesResponse?.stats?.rejected ?? 0) || 0,
-    });
-    setLoading(false);
   };
 
   useEffect(() => {
