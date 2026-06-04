@@ -756,6 +756,148 @@ body.light .resultSkeleton {
   padding: 34px 18px;
 }
 
+.backgroundUploads {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 180;
+  display: grid;
+  gap: 12px;
+  width: min(380px, calc(100vw - 28px));
+  pointer-events: none;
+}
+
+.backgroundUploadToast {
+  pointer-events: auto;
+  position: relative;
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px;
+  border-radius: 22px;
+  border: 1px solid rgba(var(--brand-primary-rgb), 0.18);
+  background:
+    radial-gradient(circle at top right, rgba(var(--brand-surface-rgb), 0.18), transparent 42%),
+    linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)),
+    rgba(10, 15, 24, 0.94);
+  box-shadow:
+    0 18px 42px rgba(3, 8, 14, 0.38),
+    inset 0 0 0 1px rgba(255,255,255,0.04);
+  backdrop-filter: blur(18px);
+}
+
+.backgroundUploadToast--failed {
+  border-color: rgba(248, 113, 113, 0.26);
+}
+
+.backgroundUploadToast--completed {
+  border-color: rgba(var(--brand-surface-rgb), 0.22);
+}
+
+.backgroundUploadToast__head,
+.backgroundUploadToast__status {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.backgroundUploadToast__head {
+  justify-content: space-between;
+}
+
+.backgroundUploadToast__status {
+  justify-content: flex-start;
+}
+
+.backgroundUploadToast__icon {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  border: 1px solid rgba(var(--brand-primary-rgb), 0.18);
+  background: rgba(var(--brand-primary-rgb), 0.12);
+  color: var(--brand-surface);
+  box-shadow: 0 10px 22px rgba(var(--brand-primary-rgb), 0.14);
+  flex-shrink: 0;
+}
+
+.backgroundUploadToast__icon--active {
+  animation: backgroundUploadSpin 1s linear infinite;
+}
+
+.backgroundUploadToast__eyebrow {
+  font-size: 10px;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.backgroundUploadToast__title {
+  margin-top: 3px;
+  font-size: 15px;
+  line-height: 1.2;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.backgroundUploadToast__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.backgroundUploadToast__meta strong {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.backgroundUploadToast__message {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.backgroundUploadToast__helper {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.backgroundUploadToast__dismiss {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(var(--brand-primary-rgb), 0.14);
+  border-radius: 11px;
+  background: rgba(255,255,255,0.04);
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color 140ms ease, color 140ms ease, background 140ms ease;
+}
+
+.backgroundUploadToast__dismiss:hover {
+  border-color: rgba(var(--brand-primary-rgb), 0.24);
+  color: var(--text);
+  background: rgba(255,255,255,0.08);
+}
+
+@keyframes backgroundUploadSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (max-width: 720px) {
   .updatesPanel {
     width: min(100vw - 18px, 780px);
@@ -772,6 +914,13 @@ body.light .resultSkeleton {
 
   .updatesPanel__heroTitle {
     font-size: 20px;
+  }
+
+  .backgroundUploads {
+    left: 14px;
+    right: 14px;
+    bottom: 14px;
+    width: auto;
   }
 }
 

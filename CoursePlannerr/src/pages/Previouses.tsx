@@ -9,6 +9,11 @@ import {
 } from "../config/universities.ts";
 import { fetchCatalogBootstrap, fetchTerms, fetchUniversities } from "../utils/catalogApi.ts";
 import { getStoredTermId, getStoredUniversityId, setStoredTermId, setStoredUniversityId } from "../utils/plannerPreferences.ts";
+import {
+  hasMatchingPreviousUploadTask,
+  startPreviousUploadTask,
+  subscribePreviousUploadTasks,
+} from "../utils/backgroundPreviousUploads.ts";
 import { TopNav } from "../components/TopNav.tsx";
 import { useSessionAccess } from "../hooks/useSessionAccess.ts";
 
@@ -127,15 +132,6 @@ function StatTile({ label, value, hint }: { label: string; value: string | numbe
       </div>
     </div>
   );
-}
-
-function readFileAsDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ""));
-    reader.onerror = () => reject(new Error("Could not read that file."));
-    reader.readAsDataURL(file);
-  });
 }
 
 export default function Previouses() {
@@ -321,6 +317,41 @@ export default function Previouses() {
     void loadPreviouses(selectedCourse);
   }, [loadPreviouses, selectedCourse]);
 
+  useEffect(() => {
+    if (!selectedCourse || !userId) return undefined;
+
+    const courseCode = `${selectedCourse.department} ${selectedCourse.course_number}`;
+    let lastSignature = "";
+    let refreshTimer = 0;
+
+    const unsubscribe = subscribePreviousUploadTasks((tasks) => {
+      const matchingTasks = tasks.filter((task) =>
+        hasMatchingPreviousUploadTask(task, userId, universityId, courseCode),
+      );
+
+      const nextSignature = matchingTasks
+        .map((task) => `${task.id}:${task.status}:${task.reviewStatus ?? ""}:${task.documentId ?? ""}`)
+        .join("|");
+
+      if (!nextSignature || nextSignature === lastSignature) return;
+      lastSignature = nextSignature;
+
+      if (refreshTimer) {
+        window.clearTimeout(refreshTimer);
+      }
+      refreshTimer = window.setTimeout(() => {
+        void loadPreviouses(selectedCourse);
+      }, 500);
+    });
+
+    return () => {
+      if (refreshTimer) {
+        window.clearTimeout(refreshTimer);
+      }
+      unsubscribe();
+    };
+  }, [loadPreviouses, selectedCourse, universityId, userId]);
+
   const handleSelectCourse = (course: CourseSearchResult) => {
     setSelectedCourse(course);
     setCourseSearch(`${course.department} ${course.course_number}`);
@@ -339,28 +370,18 @@ export default function Previouses() {
     setUploading(true);
     setMessage(null);
     try {
-      const fileDataUrl = await readFileAsDataUrl(selectedFile);
-      const response = await fetch(`${API}/api/previouses/upload`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId,
-          userEmail,
-          universityId,
-          courseCode: `${selectedCourse.department} ${selectedCourse.course_number}`,
-          courseTitle: selectedCourse.title,
-          documentTitle: documentTitle || selectedFile.name.replace(/\.[^.]+$/, ""),
-          documentKind,
-          examTermLabel,
-          note,
-          fileName: selectedFile.name,
-          fileDataUrl,
-        }),
+      startPreviousUploadTask({
+        userId,
+        userEmail,
+        universityId,
+        courseCode: `${selectedCourse.department} ${selectedCourse.course_number}`,
+        courseTitle: selectedCourse.title,
+        documentTitle: documentTitle || selectedFile.name.replace(/\.[^.]+$/, ""),
+        documentKind,
+        examTermLabel,
+        note,
+        file: selectedFile,
       });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data?.success) {
-        throw new Error(data?.error || "Could not upload that previous.");
-      }
 
       setSelectedFile(null);
       setDocumentTitle("");
@@ -368,11 +389,13 @@ export default function Previouses() {
       setNote("");
       setMessage({
         ok: true,
-        text: "Uploaded successfully. Screening and preview generation continue in the background, so the final status may update after a short refresh.",
+        text: "Background upload started. You can leave Previouses and keep using the rest of Termer while the file uploads and review finishes.",
       });
-      void loadPreviouses(selectedCourse);
+      window.setTimeout(() => {
+        void loadPreviouses(selectedCourse);
+      }, 500);
     } catch (error) {
-      setMessage({ ok: false, text: error instanceof Error ? error.message : "Upload failed." });
+      setMessage({ ok: false, text: error instanceof Error ? error.message : "Could not start that upload." });
     } finally {
       setUploading(false);
     }
@@ -608,14 +631,13 @@ export default function Previouses() {
                   }}
                 >
                   {uploading
-                    ? "Uploading..."
+                    ? "Starting..."
                     : !selectedCourse
                       ? "Select a course to upload"
                       : "Upload previous"}
                 </button>
                 <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.65 }}>
-                  The AI screens each file for course match, exam wording, and likely unrelated material before it becomes usable.
-                  Approved uploads earn unlock credits. Pending or rejected files stay controlled until reviewed.
+                  Uploads now continue in the background. You can leave this section, keep using Termer, and the status popup will stay with you until review finishes.
                 </div>
                 {message ? (
                   <div style={{ fontSize: 13, color: message.ok ? "#34d399" : "#fca5a5", lineHeight: 1.6 }}>

@@ -20,6 +20,11 @@ import {
   getGradingSystem,
   getTopGrade,
 } from "../config/gradingSystems.ts";
+import {
+  dismissPreviousUploadTask,
+  subscribePreviousUploadTasks,
+  type PreviousUploadTask,
+} from "../utils/backgroundPreviousUploads.ts";
 import { TermerMark } from "./TermerBrand.tsx";
 import type { Course } from "../types";
 import type { UniversityId, UniversityOption } from "../config/universities.ts";
@@ -168,6 +173,7 @@ export function TopNav({
   const [savingRequiredProfile, setSavingRequiredProfile] = useState(false);
   const [requiredProfileError, setRequiredProfileError] = useState("");
   const [requiredProfileSaved, setRequiredProfileSaved] = useState(false);
+  const [backgroundUploads, setBackgroundUploads] = useState<PreviousUploadTask[]>([]);
   const [rows, setRows] = useState(() => buildInitialGpaRows(scheduledCourses, defaultCourseGrade));
   const {
     isAdmin,
@@ -179,6 +185,12 @@ export function TopNav({
   const [showGrade, setShowGrade] = useState(false);
   const [gradeRows, setGradeRows] = useState(defaultGradeRows());
   const [nextId, setNextId] = useState(5);
+  const visibleBackgroundUploads = useMemo(
+    () => backgroundUploads.filter((task) => !currentUserId || task.userId === currentUserId).slice(0, 4),
+    [backgroundUploads, currentUserId],
+  );
+
+  useEffect(() => subscribePreviousUploadTasks(setBackgroundUploads), []);
 
   useEffect(() => {
     if (!currentUserId) {
@@ -902,6 +914,63 @@ export function TopNav({
           </button>
         </div>
       </header>
+
+      {visibleBackgroundUploads.length > 0 ? (
+        <div className="backgroundUploads" aria-live="polite">
+          {visibleBackgroundUploads.map((task) => {
+            const isActiveTask = task.status === "preparing" || task.status === "uploading" || task.status === "reviewing";
+            const taskTitle = task.status === "preparing"
+              ? "Preparing upload"
+              : task.status === "uploading"
+                ? "Uploading previous"
+                : task.status === "reviewing"
+                  ? "Review running in background"
+                  : task.status === "failed"
+                    ? "Upload needs attention"
+                    : "Upload finished";
+
+            return (
+              <div
+                key={task.id}
+                className={`backgroundUploadToast backgroundUploadToast--${task.status}`}
+              >
+                <div className="backgroundUploadToast__head">
+                  <div className="backgroundUploadToast__status">
+                    <span className={`backgroundUploadToast__icon${isActiveTask ? " backgroundUploadToast__icon--active" : ""}`}>
+                      <SyncRoundedIcon sx={{ fontSize: 16 }} />
+                    </span>
+                    <div>
+                      <div className="backgroundUploadToast__eyebrow">Background upload</div>
+                      <div className="backgroundUploadToast__title">{taskTitle}</div>
+                    </div>
+                  </div>
+                  {!isActiveTask ? (
+                    <button
+                      type="button"
+                      className="backgroundUploadToast__dismiss"
+                      aria-label="Dismiss upload status"
+                      onClick={() => dismissPreviousUploadTask(task.id)}
+                    >
+                      <CloseRoundedIcon sx={{ fontSize: 16 }} />
+                    </button>
+                  ) : null}
+                </div>
+
+                <div className="backgroundUploadToast__meta">
+                  <strong>{task.courseCode}</strong>
+                  <span>{task.fileName}</span>
+                </div>
+                <div className="backgroundUploadToast__message">{task.message}</div>
+                {isActiveTask ? (
+                  <div className="backgroundUploadToast__helper">
+                    You can keep using other parts of Termer while this finishes.
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
 
       {showAnnouncements && (
         <div className="gpa-overlay" onClick={() => setShowAnnouncements(false)}>
