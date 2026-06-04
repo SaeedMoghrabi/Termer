@@ -368,11 +368,7 @@ export default function Previouses() {
       setNote("");
       setMessage({
         ok: true,
-        text: data.document?.status === "approved"
-          ? "Approved by the AI screen and added to the previouses library."
-          : data.document?.status === "pending"
-            ? "Uploaded successfully. The AI flagged it for controlled review before it unlocks credits."
-            : "Uploaded successfully, but the AI rejected it as likely unrelated or fake.",
+        text: "Uploaded successfully. Screening and preview generation continue in the background, so the final status may update after a short refresh.",
       });
       void loadPreviouses(selectedCourse);
     } catch (error) {
@@ -612,7 +608,7 @@ export default function Previouses() {
                   }}
                 >
                   {uploading
-                    ? "Uploading and screening..."
+                    ? "Uploading..."
                     : !selectedCourse
                       ? "Select a course to upload"
                       : "Upload previous"}

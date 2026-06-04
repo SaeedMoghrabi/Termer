@@ -244,7 +244,7 @@ function analyzePreviousDocument({
   };
 }
 
-async function ingestPreviousUpload({
+function preparePreviousUpload({
   previousId,
   userId,
   userEmail,
@@ -287,21 +287,10 @@ async function ingestPreviousUpload({
   const safeBase = slugify(path.basename(fileName || "previous", extension)) || "previous";
   const storedFilePath = path.join(FILES_DIR, `${previousId}-${safeBase}${extension}`);
   fs.writeFileSync(storedFilePath, buffer);
-
-  const extractedText = await extractText(storedFilePath, extension, buffer);
-  const preview = await buildPreview(storedFilePath, extension, buffer, previousId);
-  const moderation = analyzePreviousDocument({
-    fileName,
-    courseCode,
-    courseTitle,
-    documentTitle,
-    extractedText,
-    previewError: preview.previewError,
-  });
-
   const fingerprint = crypto.createHash("sha256").update(buffer).digest("hex");
 
   return {
+    previousId,
     userId,
     userEmail,
     universityId,
@@ -317,10 +306,37 @@ async function ingestPreviousUpload({
     filePath: storedFilePath,
     fileSizeBytes: buffer.length,
     mimeType,
+    fingerprint,
+    buffer,
+  };
+}
+
+async function finalizePreparedUpload(preparedUpload) {
+  const extractedTextPromise = extractText(
+    preparedUpload.filePath,
+    preparedUpload.fileExtension,
+    preparedUpload.buffer,
+  );
+  const previewPromise = buildPreview(
+    preparedUpload.filePath,
+    preparedUpload.fileExtension,
+    preparedUpload.buffer,
+    preparedUpload.previousId,
+  );
+  const [extractedText, preview] = await Promise.all([extractedTextPromise, previewPromise]);
+  const moderation = analyzePreviousDocument({
+    fileName: preparedUpload.originalFileName,
+    courseCode: preparedUpload.courseCode,
+    courseTitle: preparedUpload.courseTitle,
+    documentTitle: preparedUpload.documentTitle,
+    extractedText,
+    previewError: preview.previewError,
+  });
+
+  return {
     previewPath: preview.previewPath || "",
     previewMimeType: preview.previewMimeType || "",
     sourcePages: preview.sourcePages || 0,
-    fingerprint,
     status: moderation.status,
     aiConfidence: moderation.confidence,
     aiReason: moderation.reason,
@@ -330,10 +346,45 @@ async function ingestPreviousUpload({
   };
 }
 
+async function ingestPreviousUpload(uploadRequest) {
+  const preparedUpload = preparePreviousUpload(uploadRequest);
+  const finalizedUpload = await finalizePreparedUpload(preparedUpload);
+
+  return {
+    userId: preparedUpload.userId,
+    userEmail: preparedUpload.userEmail,
+    universityId: preparedUpload.universityId,
+    courseCode: preparedUpload.courseCode,
+    courseTitle: preparedUpload.courseTitle,
+    courseId: preparedUpload.courseId,
+    documentTitle: preparedUpload.documentTitle,
+    documentKind: preparedUpload.documentKind,
+    examTermLabel: preparedUpload.examTermLabel,
+    note: preparedUpload.note,
+    originalFileName: preparedUpload.originalFileName,
+    fileExtension: preparedUpload.fileExtension,
+    filePath: preparedUpload.filePath,
+    fileSizeBytes: preparedUpload.fileSizeBytes,
+    mimeType: preparedUpload.mimeType,
+    previewPath: finalizedUpload.previewPath,
+    previewMimeType: finalizedUpload.previewMimeType,
+    sourcePages: finalizedUpload.sourcePages,
+    fingerprint: preparedUpload.fingerprint,
+    status: finalizedUpload.status,
+    aiConfidence: finalizedUpload.aiConfidence,
+    aiReason: finalizedUpload.aiReason,
+    aiLabels: finalizedUpload.aiLabels,
+    extractedTextPreview: finalizedUpload.extractedTextPreview,
+    extractedText: finalizedUpload.extractedText,
+  };
+}
+
 module.exports = {
   ALLOWED_EXTENSIONS,
   ALLOWED_MIME_TYPES,
   MAX_UPLOAD_BYTES,
   analyzePreviousDocument,
+  finalizePreparedUpload,
   ingestPreviousUpload,
+  preparePreviousUpload,
 };

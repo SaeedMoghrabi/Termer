@@ -44,7 +44,7 @@ const {
   listPreviousDocuments,
   updatePreviousDocument,
 } = require("./previousesStore.cjs");
-const { ingestPreviousUpload } = require("./previousesModeration.cjs");
+const { finalizePreparedUpload, ingestPreviousUpload, preparePreviousUpload } = require("./previousesModeration.cjs");
 const { IMPORT_ROOTS } = require("./scripts/manualTimedImports.cjs");
 const { buildVisualTimedImports } = require("./scripts/visualTimedImports.cjs");
 const { getCurriculumStatus, reloadCurriculumPlans } = require("./curriculumPlans.cjs");
@@ -1226,7 +1226,7 @@ app.post("/api/previouses/upload", async (req, res) => {
     }
 
     const previousId = createPreviousId("prev");
-    const ingested = await ingestPreviousUpload({
+    const preparedUpload = preparePreviousUpload({
       previousId,
       userId,
       userEmail,
@@ -1245,13 +1245,12 @@ app.post("/api/previouses/upload", async (req, res) => {
     const duplicate = listPreviousDocuments().find((document) =>
       normalizeUniversityId(document.universityId) === universityId
       && compactCourseCode(document.courseCode) === compactCourseCode(courseCode)
-      && normalizeText(document.fingerprint) === normalizeText(ingested.fingerprint),
+      && normalizeText(document.fingerprint) === normalizeText(preparedUpload.fingerprint),
     );
 
     if (duplicate) {
       try {
-        if (ingested.filePath && fs.existsSync(ingested.filePath)) fs.unlinkSync(ingested.filePath);
-        if (ingested.previewPath && fs.existsSync(ingested.previewPath)) fs.unlinkSync(ingested.previewPath);
+        if (preparedUpload.filePath && fs.existsSync(preparedUpload.filePath)) fs.unlinkSync(preparedUpload.filePath);
       } catch {}
       return res.status(409).json({
         error: "This exact previous is already in the library for that course.",
@@ -1259,7 +1258,18 @@ app.post("/api/previouses/upload", async (req, res) => {
       });
     }
 
-    const created = createPreviousDocument(ingested);
+    const created = createPreviousDocument({
+      ...preparedUpload,
+      status: "pending",
+      aiConfidence: 0,
+      aiReason: "Screening in progress.",
+      aiLabels: ["processing"],
+      extractedTextPreview: "",
+      extractedText: "",
+      previewPath: "",
+      previewMimeType: "",
+      sourcePages: 0,
+    });
     const userStats = getUserPreviousStats(userId);
     const isAdmin = await isAdminUser(userId);
 
@@ -1268,6 +1278,29 @@ app.post("/api/previouses/upload", async (req, res) => {
       document: buildPreviousClientDocument(created, userId, isAdmin, userStats),
       stats: userStats,
     });
+
+    void finalizePreparedUpload(preparedUpload)
+      .then((finalizedUpload) => {
+        updatePreviousDocument(created.id, {
+          status: finalizedUpload.status,
+          aiConfidence: finalizedUpload.aiConfidence,
+          aiReason: finalizedUpload.aiReason,
+          aiLabels: finalizedUpload.aiLabels,
+          extractedTextPreview: finalizedUpload.extractedTextPreview,
+          extractedText: finalizedUpload.extractedText,
+          previewPath: finalizedUpload.previewPath,
+          previewMimeType: finalizedUpload.previewMimeType,
+          sourcePages: finalizedUpload.sourcePages,
+        });
+      })
+      .catch((error) => {
+        updatePreviousDocument(created.id, {
+          status: "pending",
+          aiConfidence: 0,
+          aiReason: normalizeText(error?.message) || "Screening could not finish automatically.",
+          aiLabels: ["processing-error"],
+        });
+      });
   } catch (error) {
     res.status(400).json({ error: error?.message || "Could not upload that previous." });
   }
