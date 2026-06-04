@@ -795,6 +795,22 @@ function createScopedSupabaseClient(accessToken) {
   });
 }
 
+function decodeJwtPayload(token) {
+  const rawToken = normalizeText(token);
+  if (!rawToken) return null;
+  const parts = rawToken.split(".");
+  if (parts.length < 2) return null;
+
+  try {
+    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
+    const decoded = Buffer.from(padded, "base64").toString("utf8");
+    return JSON.parse(decoded);
+  } catch {
+    return null;
+  }
+}
+
 function normalizeCourseCode(value) {
   return normalizeText(value).toUpperCase().replace(/\s+/g, " ");
 }
@@ -1647,17 +1663,14 @@ app.post("/api/account/profile-name", async (req, res) => {
       return res.status(503).json({ error: "Profile saving is not configured on this runtime." });
     }
 
-    const {
-      data: authData,
-      error: authError,
-    } = await scopedSupabase.auth.getUser(accessToken);
+    const tokenPayload = decodeJwtPayload(accessToken) || {};
+    const userId = normalizeText(tokenPayload.sub);
+    const userEmail = normalizeText(tokenPayload.email);
 
-    if (authError || !authData?.user?.id) {
+    if (!userId) {
       return res.status(401).json({ error: "Your session could not be verified." });
     }
 
-    const userId = authData.user.id;
-    const userEmail = normalizeText(authData.user.email);
     const displayName = `${firstName} ${familyName}`.replace(/\s+/g, " ").trim();
     const updatedAt = new Date().toISOString();
 
@@ -1684,22 +1697,23 @@ app.post("/api/account/profile-name", async (req, res) => {
     }
 
     if (userEmail) {
-      const detailedUserWrite = await scopedSupabase.from("users").upsert({
+      void scopedSupabase.from("users").upsert({
         id: userId,
         email: userEmail,
         full_name: displayName,
         first_name: firstName,
         family_name: familyName,
         updated_at: updatedAt,
-      }, { onConflict: "id" });
-
-      if (detailedUserWrite.error) {
-        await scopedSupabase.from("users").upsert({
-          id: userId,
-          email: userEmail,
-          updated_at: updatedAt,
-        }, { onConflict: "id" });
-      }
+      }, { onConflict: "id" }).then(({ error: detailedUserWriteError }) => {
+        if (detailedUserWriteError) {
+          return scopedSupabase.from("users").upsert({
+            id: userId,
+            email: userEmail,
+            updated_at: updatedAt,
+          }, { onConflict: "id" });
+        }
+        return null;
+      }).catch(() => null);
     }
 
     return res.json({

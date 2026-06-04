@@ -113,6 +113,19 @@ function splitDisplayName(displayName: string) {
   };
 }
 
+function withFetchTimeout<T>(promise: Promise<T>, timeoutMs: number) {
+  return new Promise<T>((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      reject(new Error("Saving took too long. Please try again."));
+    }, timeoutMs);
+
+    promise
+      .then((value) => resolve(value))
+      .catch((error) => reject(error))
+      .finally(() => window.clearTimeout(timeoutId));
+  });
+}
+
 const defaultGradeRows = () => [
   { id: 1, name: "Midterm", weight: 30, score: "" },
   { id: 2, name: "Final Exam", weight: 40, score: "" },
@@ -448,6 +461,8 @@ export function TopNav({
     setSavingRequiredProfile(true);
     setRequiredProfileError("");
     setRequiredProfileSaved(false);
+    setRequiredProfilePromptOpen(false);
+    setRequiredProfileSaved(true);
 
     try {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -456,15 +471,18 @@ export function TopNav({
         throw new Error("Your session expired. Please sign in again.");
       }
 
-      const response = await fetch(`${API_URL}/api/account/profile-name`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          accessToken,
-          firstName,
-          familyName,
+      const response = await withFetchTimeout(
+        fetch(`${API_URL}/api/account/profile-name`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            accessToken,
+            firstName,
+            familyName,
+          }),
         }),
-      });
+        6000,
+      );
 
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -476,6 +494,7 @@ export function TopNav({
       setRequiredProfilePromptOpen(false);
       setRequiredProfileSaved(true);
     } catch (error) {
+      setRequiredProfilePromptOpen(true);
       setRequiredProfileError(
         error instanceof Error && normalizeText(error.message)
           ? error.message
