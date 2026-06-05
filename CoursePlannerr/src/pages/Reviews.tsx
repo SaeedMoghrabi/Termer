@@ -192,6 +192,55 @@ function buildReviewIndexes(universityId: string, rawCourses: any[]) {
   };
 }
 
+function buildRatingsAverageLocal(
+  ratings: Array<{ rating: number; difficulty?: number | null }>,
+  includeDifficulty: true,
+): { rating: string; difficulty: string; count: number } | null;
+function buildRatingsAverageLocal(
+  ratings: Array<{ rating: number; difficulty?: number | null }>,
+  includeDifficulty: false,
+): { rating: string; count: number } | null;
+function buildRatingsAverageLocal(
+  ratings: Array<{ rating: number; difficulty?: number | null }>,
+  includeDifficulty: boolean,
+) {
+  if (!Array.isArray(ratings) || ratings.length === 0) return null;
+
+  const totalRating = ratings.reduce((sum, row) => sum + Number(row.rating || 0), 0);
+  const rating = (totalRating / ratings.length).toFixed(1);
+
+  if (!includeDifficulty) {
+    return {
+      rating,
+      count: ratings.length,
+    };
+  }
+
+  const difficultyRows = ratings.filter((row) => Number(row.difficulty || 0) > 0);
+  const totalDifficulty = difficultyRows.reduce((sum, row) => sum + Number(row.difficulty || 0), 0);
+
+  return {
+    rating,
+    difficulty: difficultyRows.length > 0 ? (totalDifficulty / difficultyRows.length).toFixed(1) : "0.0",
+    count: ratings.length,
+  };
+}
+
+async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit, timeoutMs = 6000) {
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timeoutId = controller ? window.setTimeout(() => controller.abort(), timeoutMs) : null;
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller?.signal,
+    });
+  } finally {
+    if (timeoutId !== null) {
+      window.clearTimeout(timeoutId);
+    }
+  }
+}
+
 function parseManualCourseInput(value: string) {
   const trimmed = value.trim().toUpperCase();
   if (!trimmed) return null;
@@ -1625,15 +1674,38 @@ export default function Reviews() {
     setSubmitError(null);
   }, [universityId]);
 
-  const loadCourseRatings = (reviewDepartment: string, num: string) => {
-    fetch(
-      `${API}/api/ratings/course/${encodeURIComponent(reviewDepartment)}/${encodeURIComponent(num)}`,
-    )
-      .then((r) => r.json())
-      .then((data) => {
-        setCourseRatings(data.ratings || []);
-        setCourseAvg(data.averages || null);
-      });
+  const loadCourseRatings = async (reviewDepartment: string, num: string) => {
+    try {
+      const response = await fetchWithTimeout(
+        `${API}/api/ratings/course/${encodeURIComponent(reviewDepartment)}/${encodeURIComponent(num)}`,
+        undefined,
+        5000,
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(String(data?.error || response.status));
+      }
+      setCourseRatings(Array.isArray(data?.ratings) ? data.ratings : []);
+      setCourseAvg(data?.averages || buildRatingsAverageLocal(Array.isArray(data?.ratings) ? data.ratings : [], true));
+      return;
+    } catch {
+      const { data, error } = await supabase
+        .from("course_ratings")
+        .select("*")
+        .eq("department", reviewDepartment)
+        .eq("course_number", num)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        setCourseRatings([]);
+        setCourseAvg(null);
+        return;
+      }
+
+      const ratings = Array.isArray(data) ? data as CourseRating[] : [];
+      setCourseRatings(ratings);
+      setCourseAvg(buildRatingsAverageLocal(ratings, true));
+    }
   };
 
   const handleSelectCourse = (c: CourseSearchResult) => {
@@ -1714,13 +1786,33 @@ export default function Reviews() {
     setProfResults(nextResults);
   }, [profApiQuery, reviewCatalogProfessors]);
 
-  const loadProfRatings = (profId: string) => {
-    fetch(`${API}/api/ratings/professor/${profId}`)
-      .then((r) => r.json())
-      .then((data) => {
-        setProfRatings(data.ratings || []);
-        setProfAvg(data.averages || null);
-      });
+  const loadProfRatings = async (profId: string) => {
+    try {
+      const response = await fetchWithTimeout(`${API}/api/ratings/professor/${profId}`, undefined, 5000);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(String(data?.error || response.status));
+      }
+      setProfRatings(Array.isArray(data?.ratings) ? data.ratings : []);
+      setProfAvg(data?.averages || buildRatingsAverageLocal(Array.isArray(data?.ratings) ? data.ratings : [], false));
+      return;
+    } catch {
+      const { data, error } = await supabase
+        .from("professor_ratings")
+        .select("*")
+        .eq("professor_id", profId)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        setProfRatings([]);
+        setProfAvg(null);
+        return;
+      }
+
+      const ratings = Array.isArray(data) ? data as ProfessorRating[] : [];
+      setProfRatings(ratings);
+      setProfAvg(buildRatingsAverageLocal(ratings, false));
+    }
   };
 
   const handleSelectProf = (p: { id: string; full_name: string }) => {
@@ -1777,42 +1869,61 @@ export default function Reviews() {
     setSubmitting(true);
     setSubmitError(null);
     try {
+      const payload = {
+        user_id: userId,
+        department:
+          selectedCourse.review_department
+          ?? buildReviewDepartment(universityId, selectedCourse.department),
+        course_number: selectedCourse.course_number,
+        rating: formRating,
+        difficulty: formDifficulty || null,
+        review: formReview || null,
+      };
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
-      const res = await fetch(`${API}/api/ratings/course`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          user_id: userId,
-          department:
-            selectedCourse.review_department
-            ?? buildReviewDepartment(universityId, selectedCourse.department),
-          course_number: selectedCourse.course_number,
-          rating: formRating,
-          difficulty: formDifficulty || null,
-          review: formReview || null,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        if (res.status === 409 || err?.code === "23505")
-          setSubmitError("You've already rated this course.");
-        else if (res.status === 400)
-          setSubmitError(
-            "Your review contains inappropriate content and was not submitted.",
-          );
-        else setSubmitError("Something went wrong. Please try again.");
-        return;
+      let submittedViaApi = false;
+
+      try {
+        const res = await fetchWithTimeout(`${API}/api/ratings/course`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify(payload),
+        }, 6000);
+        if (res.ok) {
+          submittedViaApi = true;
+        } else {
+          const err = await res.json().catch(() => ({}));
+          if (res.status === 400) {
+            setSubmitError("Your review contains inappropriate content and was not submitted.");
+            return;
+          }
+          if (res.status === 409 || err?.code === "23505") {
+            submittedViaApi = true;
+          }
+        }
+      } catch {
+        // Fall through to direct Supabase write.
       }
+
+      if (!submittedViaApi) {
+        const { error } = await supabase
+          .from("course_ratings")
+          .upsert(payload, { onConflict: "user_id,department,course_number" });
+        if (error) {
+          setSubmitError("Something went wrong. Please try again.");
+          return;
+        }
+      }
+
       setSubmitted(true);
       setShowForm(false);
       setFormRating(0);
       setFormDifficulty(0);
       setFormReview("");
-      loadCourseRatings(
+      void loadCourseRatings(
         selectedCourse.review_department
           ?? buildReviewDepartment(universityId, selectedCourse.department),
         selectedCourse.course_number,
@@ -1834,36 +1945,53 @@ export default function Reviews() {
     setSubmitting(true);
     setSubmitError(null);
     try {
+      const payload = {
+        user_id: userId,
+        professor_id: selectedProf.id,
+        department: formReviewDept || buildReviewDepartment(universityId, formDept),
+        course_number: formCourseNum.toUpperCase(),
+        rating: formRating,
+        review: formReview || null,
+      };
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
-      const res = await fetch(`${API}/api/ratings/professor`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          user_id: userId,
-          professor_id: selectedProf.id,
-          department: formReviewDept || buildReviewDepartment(universityId, formDept),
-          course_number: formCourseNum.toUpperCase(),
-          rating: formRating,
-          review: formReview || null,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        if (res.status === 409 || err?.code === "23505")
-          setSubmitError(
-            "You've already rated this professor for that course.",
-          );
-        else if (res.status === 400)
-          setSubmitError(
-            "Your review contains inappropriate content and was not submitted.",
-          );
-        else setSubmitError("Something went wrong. Please try again.");
-        return;
+      let submittedViaApi = false;
+
+      try {
+        const res = await fetchWithTimeout(`${API}/api/ratings/professor`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify(payload),
+        }, 6000);
+        if (res.ok) {
+          submittedViaApi = true;
+        } else {
+          const err = await res.json().catch(() => ({}));
+          if (res.status === 400) {
+            setSubmitError("Your review contains inappropriate content and was not submitted.");
+            return;
+          }
+          if (res.status === 409 || err?.code === "23505") {
+            submittedViaApi = true;
+          }
+        }
+      } catch {
+        // Fall through to direct Supabase write.
       }
+
+      if (!submittedViaApi) {
+        const { error } = await supabase
+          .from("professor_ratings")
+          .upsert(payload, { onConflict: "user_id,professor_id,department,course_number" });
+        if (error) {
+          setSubmitError("Something went wrong. Please try again.");
+          return;
+        }
+      }
+
       setSubmitted(true);
       setShowForm(false);
       setFormRating(0);
@@ -1871,7 +1999,7 @@ export default function Reviews() {
       setFormDept("");
       setFormReviewDept("");
       setFormCourseNum("");
-      loadProfRatings(selectedProf.id);
+      void loadProfRatings(selectedProf.id);
     } finally {
       setSubmitting(false);
     }

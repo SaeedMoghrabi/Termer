@@ -60,6 +60,12 @@ const VISUAL_IMPORT_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".pd
 const MANUAL_IMPORT_WATCH_DEBOUNCE_MS = 2500;
 const MANUAL_IMPORT_UNIVERSITIES = ["lu", "liu", "aust", "usj", "aub", "lau", "bau", "usek", "ndu"];
 const aiResponseCache = new Map();
+const previousUploadBinaryParser = express.raw({
+  type(req) {
+    return Boolean(req.headers["x-termer-upload-meta"]);
+  },
+  limit: process.env.PREVIOUS_UPLOAD_RAW_LIMIT || "12mb",
+});
 
 const supabase = process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY
   ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY)
@@ -179,6 +185,16 @@ function getAiStatusPayload() {
 
 function array(value) {
   return Array.isArray(value) ? value : [];
+}
+
+function parseEncodedJsonHeader(value) {
+  const raw = normalizeText(value);
+  if (!raw) return null;
+  try {
+    return JSON.parse(decodeURIComponent(raw));
+  } catch {
+    return null;
+  }
 }
 
 function normalizeUniversityId(value) {
@@ -1205,6 +1221,106 @@ app.get("/api/previouses", async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ error: error?.message || "Could not load previouses." });
+  }
+});
+
+app.post("/api/previouses/upload-binary", previousUploadBinaryParser, async (req, res) => {
+  try {
+    const metadata = parseEncodedJsonHeader(req.headers["x-termer-upload-meta"]);
+    const userId = normalizeText(metadata?.userId);
+    const userEmail = normalizeText(metadata?.userEmail).toLowerCase();
+    const universityId = normalizeUniversityId(metadata?.universityId);
+    const courseCode = normalizeCourseCode(metadata?.courseCode);
+    const courseTitle = normalizeText(metadata?.courseTitle);
+    const fileName = normalizeText(metadata?.fileName);
+    const fileBuffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || []);
+    const mimeType = normalizeText(req.headers["content-type"]).split(";")[0].trim().toLowerCase();
+
+    if (!userId || !userEmail) {
+      return res.status(400).json({ error: "You must be signed in to upload a previous." });
+    }
+    if (!universityId || !courseCode || !fileName || !fileBuffer?.length) {
+      return res.status(400).json({ error: "Missing course or file information." });
+    }
+
+    const previousId = createPreviousId("prev");
+    const preparedUpload = preparePreviousUpload({
+      previousId,
+      userId,
+      userEmail,
+      universityId,
+      courseCode,
+      courseTitle,
+      courseId: metadata?.courseId,
+      documentTitle: metadata?.documentTitle,
+      documentKind: metadata?.documentKind,
+      examTermLabel: metadata?.examTermLabel,
+      note: metadata?.note,
+      fileName,
+      fileBuffer,
+      mimeType,
+    });
+
+    const duplicate = listPreviousDocuments().find((document) =>
+      normalizeUniversityId(document.universityId) === universityId
+      && compactCourseCode(document.courseCode) === compactCourseCode(courseCode)
+      && normalizeText(document.fingerprint) === normalizeText(preparedUpload.fingerprint),
+    );
+
+    if (duplicate) {
+      try {
+        if (preparedUpload.filePath && fs.existsSync(preparedUpload.filePath)) fs.unlinkSync(preparedUpload.filePath);
+      } catch {}
+      return res.status(409).json({
+        error: "This exact previous is already in the library for that course.",
+        duplicateId: duplicate.id,
+      });
+    }
+
+    const created = createPreviousDocument({
+      ...preparedUpload,
+      status: "pending",
+      aiConfidence: 0,
+      aiReason: "Screening in progress.",
+      aiLabels: ["processing"],
+      extractedTextPreview: "",
+      extractedText: "",
+      previewPath: "",
+      previewMimeType: "",
+      sourcePages: 0,
+    });
+    const userStats = getUserPreviousStats(userId);
+
+    res.json({
+      success: true,
+      document: buildPreviousClientDocument(created, userId, false, userStats),
+      stats: userStats,
+    });
+
+    void finalizePreparedUpload(preparedUpload)
+      .then((finalizedUpload) => {
+        updatePreviousDocument(created.id, {
+          status: finalizedUpload.status,
+          aiConfidence: finalizedUpload.aiConfidence,
+          aiReason: finalizedUpload.aiReason,
+          aiLabels: finalizedUpload.aiLabels,
+          extractedTextPreview: finalizedUpload.extractedTextPreview,
+          extractedText: finalizedUpload.extractedText,
+          previewPath: finalizedUpload.previewPath,
+          previewMimeType: finalizedUpload.previewMimeType,
+          sourcePages: finalizedUpload.sourcePages,
+        });
+      })
+      .catch((error) => {
+        updatePreviousDocument(created.id, {
+          status: "pending",
+          aiConfidence: 0,
+          aiReason: normalizeText(error?.message) || "Screening could not finish automatically.",
+          aiLabels: ["processing-error"],
+        });
+      });
+  } catch (error) {
+    res.status(400).json({ error: error?.message || "Could not upload that previous." });
   }
 });
 

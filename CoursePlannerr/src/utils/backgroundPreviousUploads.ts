@@ -49,13 +49,17 @@ type PreviousUploadResponse = {
 const STORAGE_KEY = "termer.previous-upload-tasks.v2";
 const REVIEW_POLL_MS = 3200;
 const AUTO_DISMISS_MS = 12000;
-const UPLOAD_REQUEST_TIMEOUT_MS = 45000;
+const UPLOAD_REQUEST_TIMEOUT_MS = 120000;
+const API_HEALTH_TIMEOUT_MS = 2500;
+const API_HEALTH_CACHE_MS = 15000;
 
 const listeners = new Set<(tasks: PreviousUploadTask[]) => void>();
 const pollTimers = new Map<string, number>();
 const dismissTimers = new Map<string, number>();
 
 let tasks = restoreStoredTasks();
+let lastUploadApiHealthCheck = 0;
+let lastUploadApiHealthOk = false;
 
 function normalizeText(value: unknown) {
   return String(value ?? "").trim();
@@ -89,6 +93,60 @@ function readFileAsDataUrl(file: File) {
     reader.onerror = () => reject(new Error("Could not read that file."));
     reader.readAsDataURL(file);
   });
+}
+
+function encodeUploadMeta(request: PreviousUploadRequest) {
+  return encodeURIComponent(JSON.stringify({
+    userId: request.userId,
+    userEmail: request.userEmail,
+    universityId: request.universityId,
+    courseCode: request.courseCode,
+    courseTitle: request.courseTitle,
+    documentTitle: request.documentTitle,
+    documentKind: request.documentKind,
+    examTermLabel: request.examTermLabel,
+    note: request.note,
+    fileName: request.file.name,
+  }));
+}
+
+function isLocalApiRoot() {
+  try {
+    const parsed = new URL(API, window.location.origin);
+    return parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost";
+  } catch {
+    return false;
+  }
+}
+
+async function isUploadApiReachable(force = false) {
+  const now = Date.now();
+  if (!force && now - lastUploadApiHealthCheck < API_HEALTH_CACHE_MS) {
+    return lastUploadApiHealthOk;
+  }
+
+  const controller = createUploadAbortController();
+  const timeoutId = typeof window !== "undefined"
+    ? window.setTimeout(() => controller?.abort(), API_HEALTH_TIMEOUT_MS)
+    : 0;
+
+  try {
+    const response = await fetch(`${API}/api/health`, {
+      cache: "no-store",
+      signal: controller?.signal,
+    });
+    lastUploadApiHealthOk = response.ok;
+    lastUploadApiHealthCheck = now;
+    return lastUploadApiHealthOk;
+  } catch {
+    lastUploadApiHealthOk = false;
+    lastUploadApiHealthCheck = now;
+    return false;
+  } finally {
+    if (timeoutId && typeof window !== "undefined") {
+      window.clearTimeout(timeoutId);
+    }
+  }
 }
 
 function sortTasks(nextTasks: PreviousUploadTask[]) {
@@ -344,34 +402,60 @@ async function runUploadTask(taskId: string, request: PreviousUploadRequest) {
     message: "Uploading your file now. You can leave Previouses and keep using the rest of Termer.",
   });
 
+  if (isLocalApiRoot()) {
+    const apiReachable = await isUploadApiReachable();
+    if (!apiReachable) {
+      patchTask(taskId, {
+        status: "failed",
+        message: "Termer's local upload service is offline right now. Start the local backend or use the deployed site for Previouses uploads.",
+      });
+      return;
+    }
+  }
+
   const uploadController = createUploadAbortController();
   const uploadTimeoutId = typeof window !== "undefined"
     ? window.setTimeout(() => uploadController?.abort(), UPLOAD_REQUEST_TIMEOUT_MS)
     : 0;
 
   try {
-    await new Promise((resolve) => window.setTimeout(resolve, 40));
-    const fileDataUrl = await readFileAsDataUrl(request.file);
-    const response = await fetch(`${API}/api/previouses/upload`, {
+    await new Promise((resolve) => window.setTimeout(resolve, 20));
+    const binaryResponse = await fetch(`${API}/api/previouses/upload-binary`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": request.file.type || "application/octet-stream",
+        "X-Termer-Upload-Meta": encodeUploadMeta(request),
+      },
       signal: uploadController?.signal,
-      body: JSON.stringify({
-        userId: request.userId,
-        userEmail: request.userEmail,
-        universityId: request.universityId,
-        courseCode: request.courseCode,
-        courseTitle: request.courseTitle,
-        documentTitle: request.documentTitle,
-        documentKind: request.documentKind,
-        examTermLabel: request.examTermLabel,
-        note: request.note,
-        fileName: request.file.name,
-        fileDataUrl,
-      }),
+      body: request.file,
     });
 
-    const data = await response.json().catch(() => ({} as PreviousUploadResponse));
+    let response = binaryResponse;
+    let data = await response.json().catch(() => ({} as PreviousUploadResponse));
+
+    if (response.status === 404 || response.status === 415 || response.status === 400) {
+      const fileDataUrl = await readFileAsDataUrl(request.file);
+      response = await fetch(`${API}/api/previouses/upload`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: uploadController?.signal,
+        body: JSON.stringify({
+          userId: request.userId,
+          userEmail: request.userEmail,
+          universityId: request.universityId,
+          courseCode: request.courseCode,
+          courseTitle: request.courseTitle,
+          documentTitle: request.documentTitle,
+          documentKind: request.documentKind,
+          examTermLabel: request.examTermLabel,
+          note: request.note,
+          fileName: request.file.name,
+          fileDataUrl,
+        }),
+      });
+      data = await response.json().catch(() => ({} as PreviousUploadResponse));
+    }
+
     if (!response.ok || !data?.success) {
       throw new Error(normalizeText(data?.error) || "Could not upload that previous.");
     }

@@ -38,6 +38,17 @@ function dataUrlToBuffer(dataUrl) {
   };
 }
 
+function resolveUploadBuffer({ fileDataUrl, fileBuffer, mimeType }) {
+  if (Buffer.isBuffer(fileBuffer)) {
+    return {
+      mimeType: normalizeText(mimeType),
+      buffer: fileBuffer,
+    };
+  }
+
+  return dataUrlToBuffer(fileDataUrl);
+}
+
 function slugify(value) {
   return normalizeText(value)
     .toLowerCase()
@@ -258,11 +269,15 @@ function preparePreviousUpload({
   note,
   fileName,
   fileDataUrl,
+  fileBuffer,
+  mimeType,
 }) {
   ensureDir(FILES_DIR);
-  const { mimeType, buffer } = dataUrlToBuffer(fileDataUrl);
+  const resolvedUpload = resolveUploadBuffer({ fileDataUrl, fileBuffer, mimeType });
+  const resolvedMimeType = normalizeText(resolvedUpload.mimeType).split(";")[0].trim().toLowerCase();
+  const { buffer } = resolvedUpload;
 
-  if (!ALLOWED_MIME_TYPES.has(mimeType)) {
+  if (!ALLOWED_MIME_TYPES.has(resolvedMimeType)) {
     throw new Error("Only PDF, PNG, JPG, JPEG, and WEBP previouses are supported.");
   }
 
@@ -271,11 +286,11 @@ function preparePreviousUpload({
   }
 
   const extension = path.extname(fileName || "").toLowerCase() || (
-    mimeType === "application/pdf"
+    resolvedMimeType === "application/pdf"
       ? ".pdf"
-      : mimeType === "image/png"
+      : resolvedMimeType === "image/png"
         ? ".png"
-        : mimeType === "image/webp"
+        : resolvedMimeType === "image/webp"
           ? ".webp"
           : ".jpg"
   );
@@ -305,7 +320,7 @@ function preparePreviousUpload({
     fileExtension: extension,
     filePath: storedFilePath,
     fileSizeBytes: buffer.length,
-    mimeType,
+    mimeType: resolvedMimeType,
     fingerprint,
     buffer,
   };
