@@ -417,6 +417,51 @@ function getAccountCourseCodes(account: AccountSummary) {
   ];
 }
 
+function getAccountCourseSearchEntries(account: AccountSummary) {
+  const seen = new Set<string>();
+  return account.schedules
+    .flatMap((schedule) => getCourseSnapshotsFromSchedule(schedule))
+    .map((course) => {
+      const code = normalizeCourseCode(course.code);
+      if (!code || seen.has(code)) return null;
+      seen.add(code);
+      const title = normalizeText(course.title);
+      return {
+        code,
+        title,
+        label: title ? `${code} — ${title}` : code,
+        searchBlob: normalizeSearchBlob(code, compactCourseCode(code), title),
+      };
+    })
+    .filter((entry): entry is { code: string; title: string; label: string; searchBlob: string } => Boolean(entry));
+}
+
+function getMatchedAccountCourses(account: AccountSummary, search: string) {
+  const normalizedSearch = normalizeSearchBlob(search);
+  const compactSearch = compactCourseCode(search);
+  if (!normalizedSearch && !compactSearch) return [];
+
+  return getAccountCourseSearchEntries(account)
+    .filter((entry) =>
+      entry.searchBlob.includes(normalizedSearch)
+      || (compactSearch && compactCourseCode(entry.code).includes(compactSearch)),
+    )
+    .map((entry) => entry.label);
+}
+
+function escapeCsvCell(value: unknown) {
+  const normalized = String(value ?? "");
+  if (/[",\n]/.test(normalized)) {
+    return `"${normalized.replace(/"/g, "\"\"")}"`;
+  }
+  return normalized;
+}
+
+function slugifyFilePart(value: string) {
+  const normalized = normalizeText(value).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return normalized || "course";
+}
+
 function humanizeTermId(termId?: string | null) {
   const raw = normalizeText(termId);
   if (!raw) return "Unknown term";
@@ -590,6 +635,7 @@ export default function AdminPortal() {
   const [reviewFilter, setReviewFilter] = useState<ReviewKindFilter>("all");
   const [reviewSearch, setReviewSearch] = useState("");
   const [accountSearch, setAccountSearch] = useState("");
+  const [courseLeadSearch, setCourseLeadSearch] = useState("");
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [adminEmail, setAdminEmail] = useState("");
   const [adminUserId, setAdminUserId] = useState("");
@@ -619,6 +665,7 @@ export default function AdminPortal() {
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [sendingAnnouncement, setSendingAnnouncement] = useState(false);
+  const [exportingCourseLeads, setExportingCourseLeads] = useState(false);
   const [reviewingPreviousId, setReviewingPreviousId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
@@ -942,6 +989,44 @@ export default function AdminPortal() {
     [accountSummaries, filteredAccounts, selectedAccountId],
   );
 
+  const courseLeadMatches = useMemo(() => {
+    const normalizedSearch = normalizeText(courseLeadSearch);
+    if (!normalizedSearch) return [];
+
+    return accountSummaries
+      .map((account) => {
+        const matchedCourses = getMatchedAccountCourses(account, normalizedSearch);
+        if (matchedCourses.length === 0) return null;
+
+        const nameParts = getAccountNameParts(account.profile, account.profileRecord);
+        const phoneNumber = getAccountPhoneNumber(account, contactProfiles);
+        return {
+          account,
+          matchedCourses,
+          nameParts,
+          phoneNumber,
+          schoolLabel: getUniversityShortLabel(getAccountUniversityId(account, contactProfiles)),
+        };
+      })
+      .filter((entry): entry is {
+        account: AccountSummary;
+        matchedCourses: string[];
+        nameParts: ReturnType<typeof getAccountNameParts>;
+        phoneNumber: string;
+        schoolLabel: string;
+      } => Boolean(entry))
+      .sort((left, right) => {
+        const phoneDelta = Number(Boolean(right.phoneNumber)) - Number(Boolean(left.phoneNumber));
+        if (phoneDelta !== 0) return phoneDelta;
+        return left.account.userId.localeCompare(right.account.userId);
+      });
+  }, [accountSummaries, contactProfiles, courseLeadSearch]);
+
+  const exportableCourseLeads = useMemo(
+    () => courseLeadMatches.filter((entry) => normalizeText(entry.phoneNumber)),
+    [courseLeadMatches],
+  );
+
   const selectedAccountUniversityLabel = useMemo(
     () => selectedAccount
       ? getUniversityShortLabel(getAccountUniversityId(selectedAccount, contactProfiles))
@@ -1045,6 +1130,73 @@ export default function AdminPortal() {
   const useFilteredAccountsAsTargets = () => {
     setAnnouncementAudienceMode("accounts");
     setAnnouncementTargetUserIds(filteredAccounts.map((account) => account.userId));
+  };
+
+  const exportCourseLeadsCsv = () => {
+    const normalizedSearch = normalizeText(courseLeadSearch);
+    if (!normalizedSearch) {
+      showToast("Search for a course first.", false);
+      return;
+    }
+    if (exportableCourseLeads.length === 0) {
+      showToast("No matching leads with saved phone numbers were found for that course.", false);
+      return;
+    }
+
+    setExportingCourseLeads(true);
+    try {
+      const headers = [
+        "Name",
+        "Given Name",
+        "Family Name",
+        "Course",
+        "Phone Number",
+        "Phone 1 - Type",
+        "Phone 1 - Value",
+        "Notes",
+        "Group Membership",
+      ];
+
+      const rows = exportableCourseLeads.map((entry) => {
+        const firstName = normalizeText(entry.nameParts.firstName);
+        const familyName = normalizeText(entry.nameParts.familyName);
+        const fullName = normalizeText(entry.nameParts.fullName)
+          || [firstName, familyName].filter(Boolean).join(" ")
+          || getAccountDisplayName(entry.account.profile, entry.account.profileRecord, entry.account.userId);
+        const matchedCourses = entry.matchedCourses.join(" | ");
+        return [
+          fullName,
+          firstName,
+          familyName,
+          matchedCourses,
+          entry.phoneNumber,
+          "Mobile",
+          entry.phoneNumber,
+          `Course: ${matchedCourses} | School: ${entry.schoolLabel} | Exported from Termer admin.`,
+          "* My Contacts",
+        ];
+      });
+
+      const csv = [
+        headers.map(escapeCsvCell).join(","),
+        ...rows.map((row) => row.map(escapeCsvCell).join(",")),
+      ].join("\n");
+
+      const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8;" });
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = downloadUrl;
+      anchor.download = `termer-course-leads-${slugifyFilePart(normalizedSearch)}.csv`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+      showToast(`Exported ${exportableCourseLeads.length} lead${exportableCourseLeads.length === 1 ? "" : "s"} for Google Contacts.`, true);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Could not export the leads CSV.", false);
+    } finally {
+      setExportingCourseLeads(false);
+    }
   };
 
   const handlePreviousReviewCommentChange = (previousId: string, value: string) => {
@@ -1234,7 +1386,7 @@ export default function AdminPortal() {
             Admin Portal
           </div>
           <div style={{ fontSize: 12, color: "var(--muted)" }}>
-            Reviews, accounts, schedules, and syllabus moderation · {adminEmail}{usingLocalAdminSession ? " (local admin session)" : ""}
+            Tutoring dashboard for student leads, schedules, reviews, previouses, and syllabus moderation · {adminEmail}{usingLocalAdminSession ? " (local admin session)" : ""}
           </div>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
@@ -1326,7 +1478,7 @@ export default function AdminPortal() {
             Review authors
           </FilterButton>
           <FilterButton active={view === "accounts"} onClick={() => setView("accounts")}>
-            Account schedules
+            Student leads
           </FilterButton>
           <FilterButton active={view === "previouses"} onClick={() => setView("previouses")}>
             Previouses queue
@@ -1800,7 +1952,162 @@ export default function AdminPortal() {
 
         {view === "accounts" && (
           <>
-            <div style={{ marginBottom: 18 }}>
+            <div
+              style={{
+                background: "var(--panel)",
+                border: "1px solid var(--border)",
+                borderRadius: 16,
+                padding: 20,
+                marginBottom: 18,
+                display: "grid",
+                gap: 16,
+              }}
+            >
+              <div style={{ display: "grid", gap: 6 }}>
+                <div style={{ fontSize: 12, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 800 }}>
+                  Tutoring lead finder
+                </div>
+                <div style={{ fontSize: 24, fontWeight: 800, color: "var(--text)" }}>
+                  Search students by course and export lead lists.
+                </div>
+                <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.7, maxWidth: 900 }}>
+                  Type a course code or course title, then export a CSV that is ready for Google Contacts import and already includes the student&apos;s first name, family name, matched course, and phone number.
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.4fr) auto auto", gap: 12, alignItems: "end" }}>
+                <div style={{ display: "grid", gap: 8 }}>
+                  <label style={{ fontSize: 12, color: "var(--muted)", fontWeight: 700 }}>
+                    Search by course
+                  </label>
+                  <input
+                    value={courseLeadSearch}
+                    onChange={(event) => setCourseLeadSearch(event.target.value)}
+                    placeholder="Try CMPS 244, Database Systems, or ENGL 205"
+                    style={{
+                      width: "100%",
+                      background: "var(--panel2)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 12,
+                      color: "var(--text)",
+                      padding: "12px 14px",
+                      fontSize: 14,
+                      outline: "none",
+                    }}
+                  />
+                </div>
+
+                <button
+                  onClick={exportCourseLeadsCsv}
+                  disabled={!normalizeText(courseLeadSearch) || exportableCourseLeads.length === 0 || exportingCourseLeads}
+                  style={{
+                    background: exportableCourseLeads.length > 0 ? "linear-gradient(135deg, var(--brand-primary), var(--brand-surface))" : "var(--panel2)",
+                    border: "1px solid var(--border)",
+                    color: exportableCourseLeads.length > 0 ? "var(--brand-contrast)" : "var(--muted)",
+                    padding: "12px 16px",
+                    borderRadius: 12,
+                    cursor: exportableCourseLeads.length > 0 && !exportingCourseLeads ? "pointer" : "not-allowed",
+                    fontSize: 13,
+                    fontWeight: 800,
+                    minWidth: 190,
+                    opacity: exportingCourseLeads ? 0.9 : 1,
+                  }}
+                >
+                  {exportingCourseLeads ? "Exporting..." : "Export Google Contacts CSV"}
+                </button>
+
+                <button
+                  onClick={() => setCourseLeadSearch("")}
+                  style={{
+                    background: "var(--panel2)",
+                    border: "1px solid var(--border)",
+                    color: "var(--muted)",
+                    padding: "12px 16px",
+                    borderRadius: 12,
+                    cursor: "pointer",
+                    fontSize: 13,
+                    fontWeight: 700,
+                  }}
+                >
+                  Clear
+                </button>
+              </div>
+
+              {normalizeText(courseLeadSearch) ? (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                    gap: 12,
+                  }}
+                >
+                  <div style={{ background: "var(--panel2)", border: "1px solid var(--border)", borderRadius: 12, padding: 14 }}>
+                    <div style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 800 }}>Matched students</div>
+                    <div style={{ fontSize: 26, fontWeight: 800, color: "var(--text)", marginTop: 6 }}>{courseLeadMatches.length}</div>
+                  </div>
+                  <div style={{ background: "var(--panel2)", border: "1px solid var(--border)", borderRadius: 12, padding: 14 }}>
+                    <div style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 800 }}>Ready to export</div>
+                    <div style={{ fontSize: 26, fontWeight: 800, color: "var(--text)", marginTop: 6 }}>{exportableCourseLeads.length}</div>
+                    <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>Students with saved phone numbers</div>
+                  </div>
+                  <div style={{ background: "var(--panel2)", border: "1px solid var(--border)", borderRadius: 12, padding: 14 }}>
+                    <div style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 800 }}>Missing phone</div>
+                    <div style={{ fontSize: 26, fontWeight: 800, color: "var(--text)", marginTop: 6 }}>{Math.max(0, courseLeadMatches.length - exportableCourseLeads.length)}</div>
+                    <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>These students stay off the CSV export</div>
+                  </div>
+                </div>
+              ) : null}
+
+              {normalizeText(courseLeadSearch) ? (
+                courseLeadMatches.length === 0 ? (
+                  <div style={{ background: "var(--panel2)", border: "1px dashed var(--border)", borderRadius: 12, padding: 18, color: "var(--muted)", fontSize: 13 }}>
+                    No student schedules matched that course search yet.
+                  </div>
+                ) : (
+                  <div style={{ display: "grid", gap: 10 }}>
+                    {courseLeadMatches.slice(0, 8).map((entry) => (
+                      <button
+                        key={`lead-${entry.account.userId}`}
+                        type="button"
+                        onClick={() => setSelectedAccountId(entry.account.userId)}
+                        style={{
+                          width: "100%",
+                          background: "var(--panel2)",
+                          border: "1px solid var(--border)",
+                          borderRadius: 12,
+                          padding: "14px 16px",
+                          textAlign: "left",
+                          color: "var(--text)",
+                          cursor: "pointer",
+                          display: "grid",
+                          gap: 6,
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                          <strong style={{ fontSize: 15 }}>{getAccountDisplayName(entry.account.profile, entry.account.profileRecord, entry.account.userId)}</strong>
+                          <span style={{ fontSize: 12, color: normalizeText(entry.phoneNumber) ? "#86efac" : "#fca5a5", fontWeight: 700 }}>
+                            {normalizeText(entry.phoneNumber) || "Phone not saved"}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 12, color: "var(--muted)" }}>
+                          {entry.schoolLabel} · {entry.matchedCourses.join(" | ")}
+                        </div>
+                      </button>
+                    ))}
+                    {courseLeadMatches.length > 8 ? (
+                      <div style={{ fontSize: 12, color: "var(--muted)" }}>
+                        Showing the first 8 matches here. Export includes all {courseLeadMatches.length} matched students with saved phone numbers.
+                      </div>
+                    ) : null}
+                  </div>
+                )
+              ) : null}
+            </div>
+
+            <div style={{ marginBottom: 18, display: "grid", gap: 8 }}>
+              <div style={{ fontSize: 12, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 800 }}>
+                Full account browser
+              </div>
               <input
                 value={accountSearch}
                 onChange={(event) => setAccountSearch(event.target.value)}
