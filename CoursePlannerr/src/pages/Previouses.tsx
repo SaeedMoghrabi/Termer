@@ -13,6 +13,7 @@ import {
   hasMatchingPreviousUploadTask,
   startPreviousUploadTask,
   subscribePreviousUploadTasks,
+  type PreviousUploadTask,
 } from "../utils/backgroundPreviousUploads.ts";
 import { TopNav } from "../components/TopNav.tsx";
 import { useSessionAccess } from "../hooks/useSessionAccess.ts";
@@ -41,7 +42,7 @@ type PreviousDocument = {
   note?: string;
   originalFileName: string;
   createdAt: string;
-  status: "approved" | "pending" | "rejected";
+  status: "approved" | "pending" | "rejected" | "failed";
   aiConfidence: number;
   aiReason?: string;
   adminComment?: string;
@@ -54,6 +55,7 @@ type PreviousDocument = {
   canViewFull?: boolean;
   requiresContribution?: boolean;
   unlockCreditsRemaining?: number;
+  isBackgroundTask?: boolean;
 };
 
 type PreviousStats = {
@@ -147,6 +149,7 @@ export default function Previouses() {
   const [searchableCourses, setSearchableCourses] = useState<CourseSearchResult[]>([]);
   const [selectedCourse, setSelectedCourse] = useState<CourseSearchResult | null>(null);
   const [documents, setDocuments] = useState<PreviousDocument[]>([]);
+  const [backgroundUploadTasks, setBackgroundUploadTasks] = useState<PreviousUploadTask[]>([]);
   const [stats, setStats] = useState<PreviousStats>({
     approvedUploadCount: 0,
     pendingUploadCount: 0,
@@ -317,6 +320,8 @@ export default function Previouses() {
     void loadPreviouses(selectedCourse);
   }, [loadPreviouses, selectedCourse]);
 
+  useEffect(() => subscribePreviousUploadTasks(setBackgroundUploadTasks), []);
+
   useEffect(() => {
     if (!selectedCourse || !userId) return undefined;
 
@@ -351,6 +356,63 @@ export default function Previouses() {
       unsubscribe();
     };
   }, [loadPreviouses, selectedCourse, universityId, userId]);
+
+  const visibleDocuments = useMemo(() => {
+    const existingIds = new Set(documents.map((document) => normalizeText(document.id)));
+    const selectedCourseCode = selectedCourse
+      ? `${selectedCourse.department} ${selectedCourse.course_number}`
+      : "";
+
+    const taskDocuments = backgroundUploadTasks
+      .filter((task) =>
+        selectedCourse
+        && userId
+        && hasMatchingPreviousUploadTask(task, userId, universityId, selectedCourseCode),
+      )
+      .filter((task) => !task.documentId || !existingIds.has(normalizeText(task.documentId)))
+      .map((task) => {
+        const mappedStatus: PreviousDocument["status"] =
+          task.status === "failed"
+            ? "failed"
+            : task.status === "completed"
+              ? task.reviewStatus === "approved"
+                ? "approved"
+                : task.reviewStatus === "rejected"
+                  ? "rejected"
+                  : "pending"
+              : "pending";
+
+        return {
+          id: normalizeText(task.documentId) || task.id,
+          universityId: task.universityId,
+          courseCode: task.courseCode,
+          courseTitle: task.courseTitle,
+          documentTitle: task.documentTitle,
+          documentKind: "Previous",
+          originalFileName: task.fileName,
+          createdAt: task.createdAt,
+          status: mappedStatus,
+          aiConfidence: 0,
+          aiReason: task.message,
+          extractedTextPreview:
+            task.status === "failed"
+              ? "This upload did not finish successfully. You can try uploading the file again."
+              : "This upload is still being processed in the background. You can keep using Termer and come back here while the review finishes.",
+          previewUrl: "",
+          fileUrl: "",
+          isOwnUpload: true,
+          isUnlocked: false,
+          canViewFull: false,
+          requiresContribution: false,
+          unlockCreditsRemaining: stats.unlockCredits,
+          isBackgroundTask: true,
+        } as PreviousDocument;
+      });
+
+    return [...taskDocuments, ...documents].sort((left, right) =>
+      String(right.createdAt || "").localeCompare(String(left.createdAt || "")),
+    );
+  }, [backgroundUploadTasks, documents, selectedCourse, stats.unlockCredits, universityId, userId]);
 
   const handleSelectCourse = (course: CourseSearchResult) => {
     setSelectedCourse(course);
@@ -669,7 +731,7 @@ export default function Previouses() {
                     {selectedCourse
                       ? loadingDocuments
                         ? "Refreshing..."
-                        : `${documents.length} document${documents.length === 1 ? "" : "s"}`
+                        : `${visibleDocuments.length} document${visibleDocuments.length === 1 ? "" : "s"}`
                       : "No course selected yet"}
                   </div>
                 </div>
@@ -679,13 +741,13 @@ export default function Previouses() {
                 <div className="previousesPage__emptyLibrary" style={{ ...cardStyle, padding: 22, fontSize: 14, color: "var(--muted)" }}>
                   Search for a course above, choose it from the dropdown, and this library will load all approved previouses for that course.
                 </div>
-              ) : documents.length === 0 && !loadingDocuments ? (
+              ) : visibleDocuments.length === 0 && !loadingDocuments ? (
                 <div className="previousesPage__emptyLibrary" style={{ ...cardStyle, padding: 22, fontSize: 14, color: "var(--muted)" }}>
                   No previouses are approved for this course yet. Upload the first one and the AI will screen it.
                 </div>
               ) : null}
 
-              {selectedCourse ? documents.map((document) => (
+              {selectedCourse ? visibleDocuments.map((document) => (
                 <article key={document.id} className="previousesPage__document" style={{ ...cardStyle, overflow: "hidden" }}>
                   <div className="previousesPage__documentGrid" style={{ display: "grid", gridTemplateColumns: "minmax(0, 320px) minmax(0, 1fr)", gap: 0 }}>
                     <div className="previousesPage__previewPane" style={{ position: "relative", minHeight: 260, background: "linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01))", borderRight: "1px solid var(--border)" }}>
@@ -722,7 +784,9 @@ export default function Previouses() {
                         </div>
                       ) : (
                         <div style={{ padding: 18, fontSize: 13, color: "var(--muted)" }}>
-                          Preview image is not available for this file yet.
+                          {document.isBackgroundTask
+                            ? "Termer is still uploading or reviewing this file in the background."
+                            : "Preview image is not available for this file yet."}
                         </div>
                       )}
                     </div>
@@ -794,6 +858,12 @@ export default function Previouses() {
                           >
                             Open full previous
                           </a>
+                        ) : document.isBackgroundTask ? (
+                          <span style={{ fontSize: 12, color: "var(--muted)", alignSelf: "center" }}>
+                            {document.status === "failed"
+                              ? "This upload failed before it reached the library."
+                              : "This file will appear fully here once the upload and review finish."}
+                          </span>
                         ) : (
                           <button
                             type="button"
