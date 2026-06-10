@@ -8,14 +8,18 @@ function canUseStorage() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 }
 
-function canUseLocalAdminLogin() {
+export function canUseLocalAdminLogin() {
   if (typeof window === "undefined") return false;
   return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
 }
 
+export function isLocalAdminUsername(username: string) {
+  return username.trim().toLowerCase() === "admin";
+}
+
 export function isLocalAdminCredentialPair(username: string, password: string) {
   if (!canUseLocalAdminLogin()) return false;
-  return username.trim().toLowerCase() === "admin" && password === "admin123";
+  return isLocalAdminUsername(username) && password === "admin123";
 }
 
 export function startLocalAdminSession(username = "admin"): LocalAdminSession | null {

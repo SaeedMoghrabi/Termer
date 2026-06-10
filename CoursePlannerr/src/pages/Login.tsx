@@ -12,9 +12,11 @@ import {
 } from "../utils/plannerPreferences.ts";
 import { primeUniversityCatalogCache } from "../utils/catalogWarmup.ts";
 import {
+  canUseLocalAdminLogin,
   clearLocalAdminSession,
   hasLocalAdminSession,
   isLocalAdminCredentialPair,
+  isLocalAdminUsername,
   startLocalAdminSession,
 } from "../utils/localAdminSession.ts";
 import { TermerBrand, TermerMark } from "../components/TermerBrand.tsx";
@@ -325,6 +327,14 @@ export default function Login() {
         navigate("/admin", { replace: true });
         return;
       }
+    }
+    if (isLocalAdminUsername(norm)) {
+      setError(
+        canUseLocalAdminLogin()
+          ? "Invalid local admin password."
+          : "The admin/admin123 shortcut only works on localhost or 127.0.0.1.",
+      );
+      return;
     }
     if (!phoneNumber.trim()) { setError("Please enter a phone number to complete your account."); return; }
     rememberPhone(norm, phoneNumber);
