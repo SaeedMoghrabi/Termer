@@ -35,7 +35,7 @@ type FieldProps = {
 
 const LOGIN_PHONE_BY_EMAIL_STORAGE_KEY = "termer:login-phone-by-email";
 const CONTACT_PROFILE_TIMEOUT_MS = 1800;
-const ADMIN_ALIAS_LOGIN_TIMEOUT_MS = 12_000;
+const ADMIN_ALIAS_LOGIN_TIMEOUT_MS = 90_000;
 
 type AdminAliasLoginResponse = {
   success?: boolean;
@@ -398,6 +398,7 @@ export default function Login() {
 
       setLoading(true);
       clearLocalAdminSession();
+      setInfo("Waking the secure admin login. This can take a moment after Render sleeps.");
       try {
         await signInWithDeployedAdminAlias(norm, password);
         navigate("/admin", { replace: true });

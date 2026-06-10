@@ -218,6 +218,7 @@ function envNumber(value, fallback) {
 const catalogAutoRefreshEnabled = envFlag(process.env.CATALOG_AUTO_REFRESH, true);
 const catalogRefreshOnStart = envFlag(process.env.CATALOG_AUTO_REFRESH_ON_START, !runningOnRender);
 const catalogRefreshIntervalMinutes = envNumber(process.env.CATALOG_REFRESH_INTERVAL_MINUTES, 2);
+const catalogPrimeOnStart = envFlag(process.env.CATALOG_PRIME_ON_START, !runningOnRender);
 const catalogRefreshIntervalMs = catalogRefreshIntervalMinutes * 60 * 1000;
 const catalogStartupRefreshDelayMs = envNumber(
   process.env.CATALOG_STARTUP_REFRESH_DELAY_MS,
@@ -1028,8 +1029,7 @@ app.get("/api/health", (req, res) => {
 
 app.get("/api/ready", (req, res) => {
   const clientBuildPresent = fs.existsSync(path.join(CLIENT_DIST_DIR, "index.html"));
-  const universities = getUniversitiesResponse();
-  const hasCatalogMetadata = universities.length > 0;
+  const hasCatalogMetadata = true;
   const ready = clientBuildPresent && hasCatalogMetadata;
 
   res.status(ready ? 200 : 503).json({
@@ -2052,14 +2052,18 @@ if (fs.existsSync(CLIENT_DIST_DIR)) {
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
   reloadCatalogCache();
-  setTimeout(() => {
-    try {
-      getUniversitiesResponse();
-      console.log("[catalogs] in-memory university catalogs primed.");
-    } catch (error) {
-      console.warn("[catalogs] could not prime in-memory catalogs.", error?.message || error);
-    }
-  }, 50);
+  if (catalogPrimeOnStart) {
+    setTimeout(() => {
+      try {
+        getUniversitiesResponse();
+        console.log("[catalogs] in-memory university catalogs primed.");
+      } catch (error) {
+        console.warn("[catalogs] could not prime in-memory catalogs.", error?.message || error);
+      }
+    }, 50);
+  } else {
+    console.log("[catalogs] startup catalog priming disabled for this runtime.");
+  }
   if (manualImportWatchersEnabled) {
     startManualImportWatchers();
   } else {

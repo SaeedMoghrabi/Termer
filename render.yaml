@@ -26,6 +26,8 @@ services:
         value: "false"
       - key: CATALOG_REFRESH_INTERVAL_MINUTES
         value: "2"
+      - key: CATALOG_PRIME_ON_START
+        value: "false"
       - key: ADMIN_LOGIN_USERNAME
         value: admin
       - key: ADMIN_LOGIN_EMAIL
