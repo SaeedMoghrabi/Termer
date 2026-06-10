@@ -516,8 +516,8 @@ export default function Login() {
           )}
 
           {view === "login" && (
-            <form onSubmit={handleLogin} className="uf-form">
-              <Field label="University email" type="text" name="email" autoComplete="username" placeholder="name@mail.aub.edu" value={email} onChange={setEmail} />
+            <form onSubmit={handleLogin} className="uf-form" noValidate>
+              <Field label="University email or admin username" type="text" name="username" autoComplete="username" placeholder="name@mail.aub.edu or admin" value={email} onChange={setEmail} />
               <Field label="Password" type="password" name="password" autoComplete="current-password" placeholder="Enter password" value={password} onChange={setPassword} />
               <Field label="Phone number" type="tel" name="tel" autoComplete="tel" placeholder="+961 03 123 456" value={phoneNumber} onChange={setPhoneNumber} />
               <button type="submit" disabled={loading} className="uf-btn">{loading ? "Signing in…" : "Sign in"}</button>
