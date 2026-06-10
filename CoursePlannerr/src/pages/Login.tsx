@@ -35,6 +35,20 @@ type FieldProps = {
 
 const LOGIN_PHONE_BY_EMAIL_STORAGE_KEY = "termer:login-phone-by-email";
 const CONTACT_PROFILE_TIMEOUT_MS = 1800;
+const ADMIN_ALIAS_LOGIN_TIMEOUT_MS = 12_000;
+
+type AdminAliasLoginResponse = {
+  success?: boolean;
+  error?: string;
+  user?: {
+    id?: string;
+    email?: string;
+  };
+  session?: {
+    access_token?: string;
+    refresh_token?: string;
+  };
+};
 
 const UNIVERSITY_NAME_ALIASES: Record<string, string[]> = {
   aub: ["aub", "american university of beirut", "mail.aub.edu", "aub.edu.lb"],
@@ -317,6 +331,54 @@ export default function Login() {
     return detection;
   };
 
+  const signInWithDeployedAdminAlias = async (username: string, userPassword: string) => {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), ADMIN_ALIAS_LOGIN_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(`${API_URL}/api/auth/admin-login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({
+          username,
+          password: userPassword,
+        }),
+      });
+
+      let payload: AdminAliasLoginResponse = {};
+      try {
+        payload = await response.json();
+      } catch {
+        payload = {};
+      }
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Admin sign-in is not available on this deployment yet.");
+      }
+
+      const accessToken = payload.session?.access_token;
+      const refreshToken = payload.session?.refresh_token;
+      if (!accessToken || !refreshToken) {
+        throw new Error("Admin sign-in did not return a complete session.");
+      }
+
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+
+      if (sessionError) throw sessionError;
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error("Admin sign-in timed out. Please try again.");
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault(); resetBanners();
     if (!email || !password) { setError("Please fill in all fields."); return; }
@@ -329,11 +391,21 @@ export default function Login() {
       }
     }
     if (isLocalAdminUsername(norm)) {
-      setError(
-        canUseLocalAdminLogin()
-          ? "Invalid local admin password."
-          : "The admin/admin123 shortcut only works on localhost or 127.0.0.1.",
-      );
+      if (canUseLocalAdminLogin()) {
+        setError("Invalid local admin password.");
+        return;
+      }
+
+      setLoading(true);
+      clearLocalAdminSession();
+      try {
+        await signInWithDeployedAdminAlias(norm, password);
+        navigate("/admin", { replace: true });
+      } catch (error) {
+        setError(error instanceof Error ? error.message : "Admin sign-in failed.");
+      } finally {
+        setLoading(false);
+      }
       return;
     }
     if (!phoneNumber.trim()) { setError("Please enter a phone number to complete your account."); return; }

@@ -26,6 +26,10 @@ services:
         value: "false"
       - key: CATALOG_REFRESH_INTERVAL_MINUTES
         value: "2"
+      - key: ADMIN_LOGIN_USERNAME
+        value: admin
+      - key: ADMIN_LOGIN_EMAIL
+        sync: false
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_ANON_KEY

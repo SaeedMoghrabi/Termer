@@ -21,6 +21,7 @@ This repo is ready to create both Termer services from `render.yaml`.
 ### termer-api
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
+- `ADMIN_LOGIN_EMAIL`
 
 ### termer-frontend
 - `VITE_SUPABASE_ANON_KEY`
@@ -52,6 +53,29 @@ This repo is ready to create both Termer services from `render.yaml`.
    - `termer-api`
    - `termer-frontend`
 3. Compare those URLs against the placeholder values in the Blueprint.
+
+## Deployed Admin Login
+
+The deployed site can accept the visible username:
+`admin`
+
+Do not hardcode an admin password or admin session in the repo. Instead:
+
+1. Open [Supabase Dashboard](https://supabase.com/dashboard/).
+2. Open your Termer project.
+3. Go to `Authentication` -> `Users`.
+4. Create or choose a real admin email account.
+5. Set that account's password in Supabase.
+6. Make sure the same user's row in `users` or `profiles` has:
+   `is_admin = true`
+7. In Render, open `termer-api` -> `Environment`.
+8. Set:
+   `ADMIN_LOGIN_USERNAME=admin`
+9. Set:
+   `ADMIN_LOGIN_EMAIL=<the real Supabase admin email>`
+10. Redeploy `termer-api`, then redeploy `termer-frontend` if the login bundle has changed.
+
+After this, the login page can use username `admin`, but the backend signs in through the private Supabase admin email configured in Render.
 
 ## If Render Generates Different Subdomains
 

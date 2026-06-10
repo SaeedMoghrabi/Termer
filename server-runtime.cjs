@@ -1044,6 +1044,61 @@ app.get("/api/ready", (req, res) => {
   });
 });
 
+app.post("/api/auth/admin-login", async (req, res) => {
+  try {
+    if (!supabase) {
+      return res.status(503).json({ error: "Supabase auth is not configured on this backend." });
+    }
+
+    const username = normalizeText(req.body?.username).toLowerCase();
+    const password = normalizeText(req.body?.password);
+    const configuredUsername = normalizeText(process.env.ADMIN_LOGIN_USERNAME || "admin").toLowerCase();
+    const adminEmail = normalizeText(process.env.ADMIN_LOGIN_EMAIL).toLowerCase();
+
+    if (!username || !password) {
+      return res.status(400).json({ error: "Admin username and password are required." });
+    }
+
+    if (!adminEmail) {
+      return res.status(503).json({
+        error:
+          "Deployed admin login is not configured yet. Set ADMIN_LOGIN_EMAIL on termer-api, create that Supabase admin user, then redeploy.",
+      });
+    }
+
+    if (!configuredUsername || username !== configuredUsername) {
+      return res.status(401).json({ error: "Invalid admin credentials." });
+    }
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: adminEmail,
+      password,
+    });
+
+    if (error || !data?.user || !data?.session) {
+      return res.status(401).json({ error: "Invalid admin credentials." });
+    }
+
+    const isAdmin = await isAdminUser(data.user.id);
+    if (!isAdmin) {
+      return res.status(403).json({
+        error: "That Supabase account exists, but it is not marked as an admin yet.",
+      });
+    }
+
+    return res.json({
+      success: true,
+      user: {
+        id: data.user.id,
+        email: data.user.email,
+      },
+      session: data.session,
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error?.message || "Admin sign-in failed." });
+  }
+});
+
 app.get("/api/catalog-status", (req, res) => {
   const curriculumStatus = getCurriculumStatus();
   res.json({
