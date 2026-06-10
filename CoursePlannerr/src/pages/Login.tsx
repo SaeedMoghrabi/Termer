@@ -14,6 +14,8 @@ import { primeUniversityCatalogCache } from "../utils/catalogWarmup.ts";
 import {
   clearLocalAdminSession,
   hasLocalAdminSession,
+  isLocalAdminCredentialPair,
+  startLocalAdminSession,
 } from "../utils/localAdminSession.ts";
 import { TermerBrand, TermerMark } from "../components/TermerBrand.tsx";
 
@@ -317,6 +319,13 @@ export default function Login() {
     e.preventDefault(); resetBanners();
     if (!email || !password) { setError("Please fill in all fields."); return; }
     const norm = email.trim().toLowerCase();
+    if (isLocalAdminCredentialPair(norm, password)) {
+      const session = startLocalAdminSession(norm);
+      if (session) {
+        navigate("/admin", { replace: true });
+        return;
+      }
+    }
     if (!phoneNumber.trim()) { setError("Please enter a phone number to complete your account."); return; }
     rememberPhone(norm, phoneNumber);
     const detection = ensureSupportedEmail(norm);

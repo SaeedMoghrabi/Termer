@@ -8,14 +8,25 @@ function canUseStorage() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 }
 
-export function isLocalAdminCredentialPair(username: string, password: string) {
-  void username;
-  void password;
-  return false;
+function canUseLocalAdminLogin() {
+  if (typeof window === "undefined") return false;
+  return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
 }
 
-export function startLocalAdminSession() {
-  return null;
+export function isLocalAdminCredentialPair(username: string, password: string) {
+  if (!canUseLocalAdminLogin()) return false;
+  return username.trim().toLowerCase() === "admin" && password === "admin123";
+}
+
+export function startLocalAdminSession(username = "admin"): LocalAdminSession | null {
+  if (!canUseStorage() || !canUseLocalAdminLogin()) return null;
+  const session: LocalAdminSession = {
+    active: true,
+    username,
+    startedAt: new Date().toISOString(),
+  };
+  window.localStorage.setItem("termer_local_admin_session", JSON.stringify(session));
+  return session;
 }
 
 export function clearLocalAdminSession() {
@@ -24,7 +35,22 @@ export function clearLocalAdminSession() {
 }
 
 export function getLocalAdminSession(): LocalAdminSession | null {
-  return null;
+  if (!canUseStorage() || !canUseLocalAdminLogin()) return null;
+  try {
+    const raw = window.localStorage.getItem("termer_local_admin_session");
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<LocalAdminSession>;
+    return parsed?.active && parsed.username
+      ? {
+          active: true,
+          username: parsed.username,
+          startedAt: parsed.startedAt || new Date().toISOString(),
+        }
+      : null;
+  } catch {
+    clearLocalAdminSession();
+    return null;
+  }
 }
 
 export function hasLocalAdminSession() {
